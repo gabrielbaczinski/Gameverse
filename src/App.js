@@ -1,24 +1,26 @@
-import logo from './logo.svg';
-import './App.css';
+import React from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Header from './componentes/Header';
+import Footer from './componentes/Footer';
+import TelaLogin from './telas/TelaLogin';
+import TelaCadastro from './telas/TelaCadastro';
+import TelaHome from './telas/TelaHome';  
+import Catalogo from './telas/Catalogo';
+import CriarJogo from './telas/CriarJogo';// Importe a TelaHome
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <Header /> 
+      <Routes>
+        <Route path="/" element={<TelaHome />} /> 
+        <Route path="/criarjogo" element={<CriarJogo />} />
+        <Route path="/catalogo" element={<Catalogo />} />
+        <Route path="/cadastro" element={<TelaCadastro />} />
+        <Route path="/login" element={<TelaLogin />} />
+      </Routes>
+      <Footer /> 
+    </Router>
   );
 }
 
