@@ -75,3 +75,25 @@ app.post("/api/usuarios", (req, res) => {
     });
   });
   
+  app.post("/api/login", (req, res) => {
+    const { email, senha } = req.body;
+  
+    const query = "SELECT * FROM usuarios WHERE email = ? AND senha = ?";
+    const values = [email, senha];
+  
+    db.query(query, values, (err, results) => {
+      if (err) {
+        console.error("Erro ao buscar usuário:", err);
+        return res.status(500).json({ error: "Erro interno do servidor" });
+      }
+  
+      if (results.length === 0) {
+        return res.status(401).json({ error: "Email ou senha inválidos" });
+      }
+  
+      // Aqui você pode gerar um token se quiser (JWT por exemplo)
+      const usuario = results[0];
+      res.status(200).json({ message: "Login realizado com sucesso", usuario });
+    });
+  });
+  

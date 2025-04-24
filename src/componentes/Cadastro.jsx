@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import "./../componentes/style.css"; // ajuste o caminho conforme a sua estrutura
+import { IonIcon } from '@ionic/react';
+import { person, mail, lockClosed } from 'ionicons/icons';
 
 function Cadastro() {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -36,62 +40,55 @@ function Cadastro() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-10">
-      <h1 className="text-4xl font-bold text-center text-gray-800 mb-8">Cadastro</h1>
+    <div className="wrapper1">
+      <div className="login-box">
+        <form onSubmit={handleSubmit}>
+          <h2>Cadastro</h2>
 
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-sm mx-auto">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="nome" className="block text-sm font-medium text-gray-700">
-              Nome:
-            </label>
+          <div className="input-box">
+            <span className="icon">
+              <IonIcon icon={person} />
+            </span>
             <input
               type="text"
-              id="nome"
-              name="nome"
+              required
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              required
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <label>Nome</label>
           </div>
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email:
-            </label>
+          <div className="input-box">
+            <span className="icon">
+              <IonIcon icon={mail} />
+            </span>
             <input
-              type="text"
-              id="email"
-              name="email"
+              type="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <label>Email</label>
           </div>
 
-          <div>
-            <label htmlFor="senha" className="block text-sm font-medium text-gray-700">
-            Senha:
-            </label>
+          <div className="input-box">
+            <span className="icon">
+              <IonIcon icon={lockClosed} />
+            </span>
             <input
               type="password"
-              id="senha"
-              name="senha"
+              required
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
-              required
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <label>Senha</label>
           </div>
 
-          <button
-            type="submit"
-            className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none"
-          >
-            Cadastrar
-          </button>
+          <button type="submit">Cadastrar</button>
+
+          <div className="register-link">
+            <p>Já tem uma conta? <a href="#">Entrar</a></p>
+          </div>
         </form>
       </div>
     </div>
