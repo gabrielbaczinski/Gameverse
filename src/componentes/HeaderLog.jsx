@@ -14,21 +14,21 @@ function Header() {
                 <nav>
                     <ul className="flex space-x-6">
                         <li>
-                            <Link to="/" className="hover:text-gray-400 flex items-center">
-                                <IonIcon icon={home} className="mr-2" />
-                                Home
+                            <Link to="/criarjogo" className="hover:text-gray-400 flex items-center">
+                                <IonIcon icon={create} className="mr-2" />
+                                Criar Jogo
                             </Link>
                         </li>
                         <li>
-                            <Link to="/cadastro" className="hover:text-gray-400 flex items-center">
-                                <IonIcon icon={personAdd} className="mr-2" />
-                                Cadastro
+                            <Link to="/catalogo" className="hover:text-gray-400 flex items-center">
+                                <IonIcon icon={book} className="mr-2" />
+                                Catálogo
                             </Link>
                         </li>
                         <li>
-                            <Link to="/login" className="hover:text-gray-400 flex items-center">
-                                <IonIcon icon={logIn} className="mr-2" />
-                                Login
+                            <Link to="/perfil" className="hover:text-gray-400 flex items-center">
+                                <IonIcon icon={personCircle} className="mr-2" />
+                                Perfil
                             </Link>
                         </li>
                     </ul>

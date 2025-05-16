@@ -1,14 +1,16 @@
-import React, { useState } from "react";
-import "./../componentes/style.css";
+// componentes/Login.jsx
+import React, { useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../AuthContext';
 import { IonIcon } from '@ionic/react';
 import { mail, lockClosed } from 'ionicons/icons';
-import { useNavigate } from "react-router-dom";
-
+import { Link } from 'react-router-dom';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const navigate = useNavigate();
+  const { login } = useContext(AuthContext);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,20 +20,18 @@ function Login() {
     try {
       const response = await fetch('http://localhost:5000/api/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(user),
       });
 
       if (response.ok) {
         const data = await response.json();
-        alert('Login bem-sucedido!');
-        console.log('Usuário logado:', data);
-        setEmail('');
-        setSenha('');
-        navigate('/catalogo');
-
+        if (data.token && data.id) {
+          login(data.token, data.id);
+          navigate('/catalogo');
+        } else {
+          alert('Token ou ID não recebido do servidor.');
+        }
       } else {
         alert('Email ou senha inválidos.');
       }
@@ -55,9 +55,7 @@ function Login() {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)
-              }
-              
+              onChange={(e) => setEmail(e.target.value)}
             />
             <label>Email</label>
           </div>
@@ -83,7 +81,7 @@ function Login() {
           <button type="submit">Login</button>
 
           <div className="register-link">
-            <p>Don't have an account? <a href="#">Register</a></p>
+            <p>Don't have an account? <Link to="/cadastro">Register</Link></p>
           </div>
         </form>
       </div>

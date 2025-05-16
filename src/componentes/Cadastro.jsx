@@ -7,9 +7,17 @@ function Cadastro() {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
+  const [mensagemErro, setMensagemErro] = useState('');
+  const [mensagemSucesso, setMensagemSucesso] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (senha !== confirmarSenha) {
+      setMensagemErro('As senhas não coincidem!');
+      return;
+    }
 
     const user = {
       nome,
@@ -27,16 +35,36 @@ function Cadastro() {
       });
 
       if (response.ok) {
-        alert('Usuário cadastrado com sucesso!');
+        setMensagemSucesso('Usuário cadastrado com sucesso!');
+        setMensagemErro('');
         setNome('');
         setEmail('');
         setSenha('');
+        setConfirmarSenha('');
       } else {
-        alert('Erro ao cadastrar usuário.');
+        const contentType = response.headers.get('Content-Type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          setMensagemErro(data.message || 'Erro ao cadastrar usuário.');
+        } else {
+          setMensagemErro('Erro ao cadastrar usuário. Resposta inválida do servidor.');
+        }
+        setMensagemSucesso('');
       }
-    } catch (error) {
-      alert('Erro de conexão com o servidor.');
+      if (response.status === 400) {
+        // Erro de validação, mostre uma mensagem mais detalhada
+        const errorData = await response.json();
+        setMensagemErro(errorData.message || 'Erro na validação dos dados.');
+      } else {
+        // Outros tipos de erro
+        setMensagemErro('Erro ao cadastrar usuário.');
+      }
+      
     }
+    catch (error) {
+      setMensagemErro('Erro de conexão com o servidor.');
+      setMensagemSucesso('');
+    }      
   };
 
   return (
@@ -44,6 +72,9 @@ function Cadastro() {
       <div className="login-box">
         <form onSubmit={handleSubmit}>
           <h2>Cadastro</h2>
+
+          {mensagemErro && <div className="erro">{mensagemErro}</div>}
+          {mensagemSucesso && <div className="sucesso">{mensagemSucesso}</div>}
 
           <div className="input-box">
             <span className="icon">
@@ -82,6 +113,19 @@ function Cadastro() {
               onChange={(e) => setSenha(e.target.value)}
             />
             <label>Senha</label>
+          </div>
+
+          <div className="input-box">
+            <span className="icon">
+              <IonIcon icon={lockClosed} />
+            </span>
+            <input
+              type="password"
+              required
+              value={confirmarSenha}
+              onChange={(e) => setConfirmarSenha(e.target.value)}
+            />
+            <label>Confirmar Senha</label>
           </div>
 
           <button type="submit">Cadastrar</button>

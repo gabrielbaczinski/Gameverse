@@ -1,26 +1,58 @@
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+// App.js
+import React, { useContext } from 'react';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from './componentes/Header';
+import HeaderLog from './componentes/HeaderLog';
 import Footer from './componentes/Footer';
-import TelaLogin from './telas/TelaLogin';
-import TelaCadastro from './telas/TelaCadastro';
-import TelaHome from './telas/TelaHome';  
+import TelaHome from './telas/TelaHome';
+import CriarJogo from './telas/CriarJogo';
 import Catalogo from './telas/Catalogo';
-import CriarJogo from './telas/CriarJogo';// Importe a TelaHome
+import TelaCadastro from './telas/TelaCadastro';
+import TelaLogin from './telas/TelaLogin';
+import Perfil from './telas/Perfil';// Supondo que você tenha uma função para verificar a expiração do token
+import { AuthProvider, AuthContext, isTokenExpired} from './AuthContext';
 
-function App() {
+function AppContent() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+
+    if (token && isTokenExpired(token)) {
+      alert("Sua sessão expirou. Faça login novamente.");
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userId");
+      navigate("/login");
+    }
+  }, []);
+
+  const { isAuthenticated } = useContext(AuthContext);
+
   return (
-    <Router>
-      <Header /> 
+    <>
+      {isAuthenticated ? <HeaderLog /> : <Header />}
       <Routes>
-        <Route path="/" element={<TelaHome />} /> 
+        <Route path="/" element={<TelaHome />} />
         <Route path="/criarjogo" element={<CriarJogo />} />
         <Route path="/catalogo" element={<Catalogo />} />
         <Route path="/cadastro" element={<TelaCadastro />} />
         <Route path="/login" element={<TelaLogin />} />
+        <Route path="/perfil" element={<Perfil />} />
       </Routes>
-      <Footer /> 
-    </Router>
+      <Footer />
+    </>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </AuthProvider>
   );
 }
 

@@ -1,27 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function CriarJogo() {
   const [nome, setNome] = useState('');
   const [ano, setAno] = useState('');
   const [genero, setGenero] = useState('');
   const [imagem, setImagem] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
-  // Função para enviar o novo jogo para o backend
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      navigate('/login');
+    }
+  }, [navigate]); // Verificação do token ao carregar o componente
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem('authToken'); // Recuperando o token de autenticação
 
-    const jogo = {
-      nome,
-      ano,
-      genero,
-      imagem,
-    };
+    if (!token) {
+      navigate('/login'); // Redireciona para login se o token não estiver presente
+      return;
+    }
+
+    const jogo = { nome, ano, genero, imagem };
+
+    setLoading(true); // Inicia o carregamento
 
     try {
       const response = await fetch('http://localhost:5000/api/jogos', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // Incluindo o token no cabeçalho
         },
         body: JSON.stringify(jogo),
       });
@@ -32,11 +46,15 @@ function CriarJogo() {
         setAno('');
         setGenero('');
         setImagem('');
+        navigate('/catalogo'); // Redireciona para o catálogo de jogos após a criação
       } else {
-        alert('Erro ao criar o jogo.');
+        const errorData = await response.json();
+        setError(errorData.message || 'Erro ao criar o jogo.');
       }
     } catch (error) {
-      alert('Erro de conexão com o servidor.');
+      setError('Erro de conexão com o servidor.');
+    } finally {
+      setLoading(false); // Finaliza o carregamento
     }
   };
 
@@ -46,6 +64,8 @@ function CriarJogo() {
 
       <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-sm mx-auto">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {error && <div className="text-red-500 text-sm">{error}</div>}  {/* Exibindo mensagem de erro */}
+          
           <div>
             <label htmlFor="nome" className="block text-sm font-medium text-gray-700">
               Nome:
@@ -109,8 +129,9 @@ function CriarJogo() {
           <button
             type="submit"
             className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none"
+            disabled={loading}  // Desabilita o botão durante o carregamento
           >
-            Criar Jogo
+            {loading ? 'Criando...' : 'Criar Jogo'}
           </button>
         </form>
       </div>

@@ -1,14 +1,15 @@
-import React from "react";
-import Header from '../componentes/Header.jsx';
-import Footer from '../componentes/Footer.jsx';
-import Login from '../componentes/Login.jsx';
+import React, { useContext } from "react";
+import Login from "../componentes/Login.jsx";
+import { AuthContext } from "../AuthContext";
 
-function TelaLogin(){
-    return (
-      <div>
-        <Login/>
-      </div>
-    )
-  }
-  
-  export default TelaLogin;
+function TelaLogin() {
+  const { login } = useContext(AuthContext);
+
+  return (
+    <div>
+      <Login onLoginSuccess={login} />
+    </div>
+  );
+}
+
+export default TelaLogin;

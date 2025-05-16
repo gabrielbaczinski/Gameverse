@@ -1,26 +1,53 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 function Catalogo() {
   const [jogos, setJogos] = useState([]);
   const [busca, setBusca] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
-  // Fazendo a requisição para o backend
   useEffect(() => {
-    axios.get("http://localhost:5000/api/jogos")
+    const token = localStorage.getItem("authToken");
+
+
+    if (!token) {
+      navigate("/login");  // Redireciona para a tela de login caso o token não exista
+      return;
+    }
+
+    axios
+      .get("http://localhost:5000/api/jogos", {
+        headers: {
+          Authorization: `Bearer ${token}`,  // Incluindo o token no cabeçalho
+        },
+      })
       .then((response) => {
         setJogos(response.data);
+        setLoading(false);  // Parando o carregamento
       })
       .catch((error) => {
+        setError("Erro ao carregar os jogos.");
+        setLoading(false);
         console.error("Erro ao buscar os jogos:", error);
       });
-  }, []);
+  }, [navigate]);
 
   const jogosFiltrados = jogos.filter((jogo) =>
     `${jogo.nome} ${jogo.genero} ${jogo.ano}`
       .toLowerCase()
       .includes(busca.toLowerCase())
   );
+
+  if (loading) {
+    return <div>Carregando...</div>;  // Exibindo um loading
+  }
+
+  if (error) {
+    return <div>{error}</div>;  // Exibindo o erro, caso haja
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-10">
