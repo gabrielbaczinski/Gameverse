@@ -1,7 +1,6 @@
-import React, { useState } from "react";
-import "./../componentes/style.css"; // ajuste o caminho conforme a sua estrutura
-import { IonIcon } from '@ionic/react';
-import { person, mail, lockClosed } from 'ionicons/icons';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import '../login.css'; // usar o CSS do login para manter estilo igual
 
 function Cadastro() {
   const [nome, setNome] = useState('');
@@ -16,21 +15,16 @@ function Cadastro() {
 
     if (senha !== confirmarSenha) {
       setMensagemErro('As senhas não coincidem!');
+      setMensagemSucesso('');
       return;
     }
 
-    const user = {
-      nome,
-      email,
-      senha,
-    };
+    const user = { nome, email, senha };
 
     try {
       const response = await fetch('http://localhost:5000/api/usuarios', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(user),
       });
 
@@ -42,100 +36,85 @@ function Cadastro() {
         setSenha('');
         setConfirmarSenha('');
       } else {
-        const contentType = response.headers.get('Content-Type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          setMensagemErro(data.message || 'Erro ao cadastrar usuário.');
-        } else {
-          setMensagemErro('Erro ao cadastrar usuário. Resposta inválida do servidor.');
-        }
+        const data = await response.json();
+        setMensagemErro(data.message || 'Erro ao cadastrar usuário.');
         setMensagemSucesso('');
       }
-      if (response.status === 400) {
-        // Erro de validação, mostre uma mensagem mais detalhada
-        const errorData = await response.json();
-        setMensagemErro(errorData.message || 'Erro na validação dos dados.');
-      } else {
-        // Outros tipos de erro
-        setMensagemErro('Erro ao cadastrar usuário.');
-      }
-      
-    }
-    catch (error) {
+    } catch (error) {
       setMensagemErro('Erro de conexão com o servidor.');
       setMensagemSucesso('');
-    }      
+    }
   };
 
   return (
-    <div className="wrapper1">
-      <div className="login-box">
-        <form onSubmit={handleSubmit}>
+    <section>
+      {[...Array(200)].map((_, i) => (
+        <span key={i}></span>
+      ))}
+
+      <div className="signin">
+        <div className="content">
           <h2>Cadastro</h2>
 
-          {mensagemErro && <div className="erro">{mensagemErro}</div>}
-          {mensagemSucesso && <div className="sucesso">{mensagemSucesso}</div>}
+          {mensagemErro && (
+            <div style={{ color: 'red', marginBottom: '10px' }}>{mensagemErro}</div>
+          )}
+          {mensagemSucesso && (
+            <div style={{ color: 'lime', marginBottom: '10px' }}>{mensagemSucesso}</div>
+          )}
 
-          <div className="input-box">
-            <span className="icon">
-              <IonIcon icon={person} />
-            </span>
-            <input
-              type="text"
-              required
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-            />
-            <label>Nome</label>
-          </div>
+          <form className="form" onSubmit={handleSubmit}>
+            <div className="inputBox">
+              <input
+                type="text"
+                required
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+              />
+              <i>Nome</i>
+            </div>
 
-          <div className="input-box">
-            <span className="icon">
-              <IonIcon icon={mail} />
-            </span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <label>Email</label>
-          </div>
+            <div className="inputBox">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <i>Email</i>
+            </div>
 
-          <div className="input-box">
-            <span className="icon">
-              <IonIcon icon={lockClosed} />
-            </span>
-            <input
-              type="password"
-              required
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-            />
-            <label>Senha</label>
-          </div>
+            <div className="inputBox">
+              <input
+                type="password"
+                required
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+              />
+              <i>Senha</i>
+            </div>
 
-          <div className="input-box">
-            <span className="icon">
-              <IonIcon icon={lockClosed} />
-            </span>
-            <input
-              type="password"
-              required
-              value={confirmarSenha}
-              onChange={(e) => setConfirmarSenha(e.target.value)}
-            />
-            <label>Confirmar Senha</label>
-          </div>
+            <div className="inputBox">
+              <input
+                type="password"
+                required
+                value={confirmarSenha}
+                onChange={(e) => setConfirmarSenha(e.target.value)}
+              />
+              <i>Confirmar Senha</i>
+            </div>
 
-          <button type="submit">Cadastrar</button>
+            <div className="inputBox">
+              <input type="submit" value="Cadastrar" />
+            </div>
 
-          <div className="register-link">
-            <p>Já tem uma conta? <a href="#">Entrar</a></p>
-          </div>
-        </form>
+            <div className="links" style={{ justifyContent: 'center' }}>
+              <Link to="/login">Já tem uma conta? Entrar</Link>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 

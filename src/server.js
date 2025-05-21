@@ -150,6 +150,43 @@ app.post('/api/usuario', (req, res) => {
   }
 });
 
+app.put("/api/jogos/:id", authenticate, (req, res) => {
+  const { id } = req.params;
+  const { nome, ano, genero, imagem } = req.body;
+
+  const query = `
+    UPDATE jogos 
+    SET nome = ?, ano = ?, genero = ?, imagem = ?
+    WHERE id = ?
+  `;
+
+  db.query(query, [nome, ano, genero, imagem, id], (err, result) => {
+    if (err) return res.status(500).json({ error: "Erro ao atualizar jogo" });
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Jogo não encontrado" });
+
+    // Buscar o jogo atualizado
+    const selectQuery = "SELECT * FROM jogos WHERE id = ?";
+    db.query(selectQuery, [id], (err, rows) => {
+      if (err) return res.status(500).json({ error: "Erro ao buscar jogo atualizado" });
+      res.status(200).json(rows[0]);
+    });
+  });
+});
+
+app.delete("/api/jogos/:id", authenticate, (req, res) => {
+  const { id } = req.params;
+
+  const query = "DELETE FROM jogos WHERE id = ?";
+
+  db.query(query, [id], (err, result) => {
+    if (err) return res.status(500).json({ error: "Erro ao deletar jogo" });
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Jogo não encontrado" });
+
+    res.status(200).json({ message: "Jogo deletado com sucesso" });
+  });
+});
+
+
 // Inicia o servidor
 app.listen(port, () => {
   console.log(`Servidor rodando na porta ${port}`);

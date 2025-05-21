@@ -88,6 +88,8 @@ function CriarJogo() {
             <input
               type="number"
               id="ano"
+              min="1952"
+              max={new Date().getFullYear()+5} // Limita o ano até o ano atual
               name="ano"
               value={ano}
               onChange={(e) => setAno(e.target.value)}
