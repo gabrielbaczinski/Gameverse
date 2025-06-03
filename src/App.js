@@ -26,7 +26,7 @@ function AppContent() {
       localStorage.removeItem("userId");
       navigate("/login");
     }
-  }, []);
+  }, [navigate]);
 
   const { isAuthenticated } = useContext(AuthContext);
 
