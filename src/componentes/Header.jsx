@@ -1,8 +1,7 @@
 // Header.js
-import React, { Profiler } from 'react';
 import { Link } from 'react-router-dom';
 import { IonIcon } from '@ionic/react';
-import { home, create, book, personAdd, logIn, personCircle } from 'ionicons/icons';
+import { home, personAdd, logIn,  } from 'ionicons/icons';
 
 function Header() {
     return (

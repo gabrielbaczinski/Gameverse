@@ -10,6 +10,8 @@ import TelaHome from './telas/TelaHome';
 import CriarJogo from './telas/CriarJogo';
 import Catalogo from './telas/Catalogo';
 import TelaCadastro from './telas/TelaCadastro';
+import RedefinirSenha from './telas/RedefinirSenha';  
+import ResetarSenhaConfirmacao from './telas/ResetarSenhaConfirmacao';
 import TelaLogin from './telas/TelaLogin';
 import Perfil from './telas/Perfil';// Supondo que você tenha uma função para verificar a expiração do token
 import { AuthProvider, AuthContext, isTokenExpired} from './AuthContext';
@@ -40,6 +42,8 @@ function AppContent() {
         <Route path="/cadastro" element={<TelaCadastro />} />
         <Route path="/login" element={<TelaLogin />} />
         <Route path="/perfil" element={<Perfil />} />
+        <Route path="/redefinirsenha" element={<RedefinirSenha />} />
+        <Route path="/resetar-senha-confirmacao/:token" element={<ResetarSenhaConfirmacao />} />
       </Routes>
       <Footer />
     </>

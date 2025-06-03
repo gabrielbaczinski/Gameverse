@@ -1,37 +1,28 @@
-// componentes/Login.jsx
-import React, { useState, useContext } from 'react';
+// componentes/RedefinirSenha.jsx
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../AuthContext';
-import '../login.css'; // Supondo que você tenha o CSS baseado no "Hacker Login Form"
+import '../login.css'; // Supondo que você reutilize o mesmo CSS
 
-function Login() {
+function RedefinirSenha() {
   const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
   const navigate = useNavigate();
-  const { login } = useContext(AuthContext);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const user = { email, senha };
-
     try {
-      const response = await fetch('http://localhost:5000/api/login', {
+      const response = await fetch('http://localhost:5000/api/redefinir-senha', { // Endpoint para solicitar redefinição
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(user),
+        body: JSON.stringify({ email }),
       });
 
       if (response.ok) {
-        const data = await response.json();
-        if (data.token && data.id) {
-          login(data.token, data.id);
-          navigate('/catalogo');
-        } else {
-          alert('Token ou ID não recebido do servidor.');
-        }
+        alert('Se o email estiver cadastrado, você receberá um link para redefinir sua senha.');
+        navigate('/login'); // Redireciona para o login após a solicitação
       } else {
-        alert('Email ou senha inválidos.');
+        const errorData = await response.json().catch(() => null); // Tenta pegar mais detalhes do erro
+        alert(errorData?.message || 'Não foi possível processar sua solicitação. Tente novamente.');
       }
     } catch (error) {
       alert('Erro de conexão com o servidor.');
@@ -47,7 +38,7 @@ function Login() {
 
       <div className="signin">
         <div className="content">
-          <h2>Login</h2>
+          <h2>Redefinir Senha</h2>
           <form className="form" onSubmit={handleSubmit}>
             <div className="inputBox">
               <input
@@ -58,21 +49,12 @@ function Login() {
               />
               <i>Email</i>
             </div>
-            <div className="inputBox">
-              <input
-                type="password"
-                required
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-              />
-              <i>Password</i>
-            </div>
             <div className="links">
-              <Link to="/redefinirsenha">Esqueceu a senha?</Link>
+              <Link to="/login">Voltar para o Login</Link>
               <Link to="/cadastro">Cadastre-se</Link>
             </div>
             <div className="inputBox">
-              <input type="submit" value="Login" />
+              <input type="submit" value="Enviar Link de Redefinição" />
             </div>
           </form>
         </div>
@@ -81,4 +63,4 @@ function Login() {
   );
 }
 
-export default Login;
+export default RedefinirSenha;
