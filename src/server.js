@@ -29,13 +29,13 @@ db.connect((err) => {
   console.log("Conectado ao banco de dados!");
 });
 
-let transporter = nodemailer.createTransport({
-  host: 'smtp.ethereal.email', // Servidor SMTP de teste
-  port: 587,
-  auth: {
-    user: 'YOUR_ETHEREAL_USER', // Crie uma conta em https://ethereal.email/
-    pass: 'YOUR_ETHEREAL_PASSWORD'  // Sua senha do Ethereal
-  }
+const transporter = nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    auth: {
+        user: 'abel72@ethereal.email',
+        pass: 'zu9KRNp383SvE2h4MF'
+    }
 });
 
 const JWT_SECRET = 'meusegredoabc'; // Mantenha seguro e fora do código em produção
@@ -201,14 +201,10 @@ app.post("/api/redefinir-senha", (req, res) => { // Mantendo o nome do endpoint 
       };
 
       try {
-        // Descomente esta seção se tiver configurado o 'transporter' do nodemailer
-        /*
         let info = await transporter.sendMail(mailOptions);
         console.log('Email enviado: %s', info.messageId);
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info)); // Para Ethereal
-        */
 
-        // Se não estiver usando nodemailer agora, logue o link no console para teste:
         console.log(`Link de redefinição para ${user.email}: ${resetLink}`);
 
 
