@@ -4,62 +4,65 @@ import { jwtDecode } from "jwt-decode";
 export const AuthContext = createContext();
 
 export const isTokenExpired = (token) => {
-    if (!token) return true;
-    try {
-      const decoded = jwtDecode(token);
-      const now = Date.now() / 1000;
-      return decoded.exp < now;
-    } catch (err) {
-      return true;
-    }
-  };
+  if (!token) return true;
+  try {
+    const decoded = jwtDecode(token);
+    const now = Date.now() / 1000;
+    return decoded.exp < now;
+  } catch (err) {
+    return true;
+  }
+};
 
 export function AuthProvider({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const token = localStorage.getItem('authToken');
+    return token && !isTokenExpired(token);
+  });
+  const [user, setUser] = useState(null);
 
-  // Função para verificar se o token expirou
-  
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    const userId = localStorage.getItem('userId');
+    
+    if (token && !isTokenExpired(token)) {
+      setIsAuthenticated(true);
+      if (userId) {
+        fetch(`http://localhost:5000/api/usuarios/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => setUser(data))
+        .catch(console.error);
+      }
+    }
+  }, []);
 
-  // Função de login
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token && isTokenExpired(token)) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userId');
+      setIsAuthenticated(false);
+      setUser(null);
+    }
+  }, []);
+
   const login = (token, userId) => {
     localStorage.setItem('authToken', token);
     localStorage.setItem('userId', userId);
     setIsAuthenticated(true);
   };
 
-  // Função de logout
   const logout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userId');
     setIsAuthenticated(false);
-    window.location.href = '/login'; // Redireciona para a tela de login
+    setUser(null);
   };
 
-  // Verifica o token ao montar o componente
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-
-    if (token && isTokenExpired(token)) {
-      alert("Sua sessão expirou. Faça login novamente.");
-      logout();
-    } else {
-      setIsAuthenticated(!!token);
-    }
-
-    // Verifica a cada minuto se o token ainda é válido
-    const interval = setInterval(() => {
-      const currentToken = localStorage.getItem('authToken');
-      if (currentToken && isTokenExpired(currentToken)) {
-        alert("Sua sessão expirou. Faça login novamente.");
-        logout();
-      }
-    }, 60000); // a cada 60 segundos
-
-    return () => clearInterval(interval);
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, login, logout, user }}>
       {children}
     </AuthContext.Provider>
   );

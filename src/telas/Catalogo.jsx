@@ -5,6 +5,8 @@ import JogoModal from "../componentes/JogoModal";
 
 function Catalogo() {
   const [jogos, setJogos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
   const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,6 +36,23 @@ function Catalogo() {
       });
   }, [navigate]);
 
+  useEffect(() => {
+    // Carregar categorias
+    const carregarCategorias = async () => {
+      const token = localStorage.getItem("authToken");
+      try {
+        const response = await axios.get("http://localhost:5000/api/categorias", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCategorias(response.data);
+      } catch (error) {
+        console.error("Erro ao carregar categorias:", error);
+      }
+    };
+    
+    carregarCategorias();
+  }, []);
+
   const handleAtualizar = (jogoAtualizado) => {
     setJogos(jogos.map(j => j.id === jogoAtualizado.id ? jogoAtualizado : j));
   };
@@ -42,11 +61,17 @@ function Catalogo() {
     setJogos(jogos.filter(j => j.id !== idJogo));
   };
 
-  const jogosFiltrados = jogos.filter((jogo) =>
-    `${jogo.nome} ${jogo.genero} ${jogo.ano}`
+  const jogosFiltrados = jogos.filter((jogo) => {
+    const matchBusca = `${jogo.nome} ${jogo.genero} ${jogo.ano}`
       .toLowerCase()
-      .includes(busca.toLowerCase())
-  );
+      .includes(busca.toLowerCase());
+    
+    const matchCategoria = categoriaSelecionada 
+      ? jogo.categorias?.includes(categoriaSelecionada)
+      : true;
+
+    return matchBusca && matchCategoria;
+  });
 
   if (loading) return <div className="text-center mt-20 text-white">Carregando...</div>;
   if (error) return <div className="text-center mt-20 text-red-500">{error}</div>;
@@ -55,58 +80,57 @@ function Catalogo() {
     <div className="min-h-screen bg-black text-white p-10">
       <h1 className="text-4xl font-bold text-center mb-8">Catálogo de Jogos</h1>
 
-      <div className="flex justify-center mb-8">
+      <div className="flex flex-col md:flex-row justify-center gap-4 mb-8">
         <input
           type="text"
           placeholder="Buscar por nome, gênero ou ano..."
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          className="w-full max-w-md px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full md:w-1/2 px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        
+        <select
+          value={categoriaSelecionada}
+          onChange={(e) => setCategoriaSelecionada(e.target.value)}
+          className="w-full md:w-1/4 px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Todas as categorias</option>
+          {categorias.map(cat => (
+            <option key={cat.id} value={cat.nome}>
+              {cat.nome}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="flex flex-wrap gap-8 justify-center">
-        {jogosFiltrados.map((jogo) => (
-          <div
-            key={jogo.id}
-            className="relative group cursor-pointer transition-transform duration-300 ease-in-out transform hover:scale-105 will-change-transform"
-          >
-            <div className="relative z-10">
+      <div className="cards-container">
+        {jogosFiltrados.map(jogo => (
+          <div key={jogo.id} className="game-card" onClick={() => setJogoSelecionado(jogo)}>
+            <div className="card-front-image">
               <img
                 src={jogo.imagem}
                 alt={jogo.nome}
-                className="w-[250px] h-[370px] object-cover rounded-2xl shadow-lg will-change-transform"
+                className="card-image"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent rounded-2xl z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-in-out"></div>
-              <div className="absolute bottom-0 left-0 right-0 p-4 text-white z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-in-out">
-                <h2 className="text-xl font-bold">{jogo.nome}</h2>
-                <p className="text-sm">Ano: {jogo.ano}</p>
-                <p className="text-sm mb-2">Gênero: {jogo.genero}</p>
-                <button
-                  onClick={() => setJogoSelecionado(jogo)}
-                  className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 transition w-full"
-                >
-                  Veja Mais
-                </button>
+              <div className="card-content">
+                <h2 className="text-xl font-bold mb-2">{jogo.nome}</h2>
+                <p className="text-sm opacity-90">Ano: {jogo.ano}</p>
+                <p className="text-sm opacity-90">Gênero: {jogo.genero}</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {jogo.categorias?.map((categoria, index) => (
+                    <span 
+                      key={index}
+                      className="px-2 py-1 text-xs bg-blue-600 rounded-full"
+                    >
+                      {categoria}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-
-            <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none z-0">
-              {[...Array(3)].map((_, i) => (
-                <img
-                  key={i}
-                  src={jogo.imagem}
-                  alt=""
-                  className={`absolute w-full h-full object-cover opacity-10 blur-sm scale-110 ${i % 2 === 0 ? "animate-fadeLeft" : "animate-fadeRight"
-                    }`}
-                  style={{
-                    animationDelay: `${i * 0.4}s`,
-                    top: 0,
-                    left: 0,
-                    animationTimingFunction: "ease-in-out",
-                    willChange: "transform, opacity"
-                  }}
-                />
+            <div className="card-faders">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="card-fader" />
               ))}
             </div>
           </div>
@@ -120,7 +144,6 @@ function Catalogo() {
           onUpdate={handleAtualizar}
           onDelete={handleExcluir}
         />
-
       )}
     </div>
   );

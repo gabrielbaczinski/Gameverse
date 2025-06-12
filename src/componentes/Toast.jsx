@@ -1,43 +1,39 @@
-import React, { useEffect, useRef, useState } from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+import React, { Fragment } from 'react';
+import { Transition } from '@headlessui/react';
+import { CheckCircleIcon, XCircleIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
-export default function ToastAlert({ message, type = 'error', show }) {
-  const toastRef = useRef(null);
-  const [toastInstance, setToastInstance] = useState(null);
-
-  useEffect(() => {
-    if (toastRef.current) {
-      const toast = new window.bootstrap.Toast(toastRef.current);
-      setToastInstance(toast);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (show && toastInstance) {
-      toastInstance.show();
-    }
-  }, [show, toastInstance]);
-
-  const bgColor = type === 'success' ? 'success' : 'danger';
-
+export default function ToastAlert({ show, message, type, onClose }) {
   return (
-    <div
-      ref={toastRef}
-      className={`toast align-items-center text-white bg-${bgColor} border-0 position-fixed bottom-0 end-0 m-3`}
-      role="alert"
-      aria-live="assertive"
-      aria-atomic="true"
+    <Transition
+      show={show}
+      as={Fragment}
+      enter="transform ease-out duration-300 transition"
+      enterFrom="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
+      enterTo="translate-y-0 opacity-100 sm:translate-x-0"
+      leave="transition ease-in duration-100"
+      leaveFrom="opacity-100"
+      leaveTo="opacity-0"
     >
-      <div className="d-flex">
-        <div className="toast-body">{message}</div>
-        <button
-          type="button"
-          className="btn-close btn-close-white me-2 m-auto"
-          data-bs-dismiss="toast"
-          aria-label="Close"
-        ></button>
+      <div className="fixed bottom-4 right-4 z-[9999] min-w-[350px]">
+        <div className={`toast-alert ${type}`}>
+          <div className="flex-shrink-0">
+            {type === 'success' && <CheckCircleIcon className="h-6 w-6 text-white" />}
+            {type === 'error' && <XCircleIcon className="h-6 w-6 text-white" />}
+            {type === 'info' && <InformationCircleIcon className="h-6 w-6 text-white" />}
+          </div>
+          <div className="flex-1">
+            <p className="text-white">{message}</p>
+          </div>
+          <div className="flex-shrink-0">
+            <button
+              className="rounded-md text-white hover:opacity-80 focus:outline-none"
+              onClick={onClose}
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </Transition>
   );
 }

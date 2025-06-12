@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require('bcryptjs'); // Para hashear senhas
 const crypto = require('crypto');   // Para gerar tokens de redefinição
 const nodemailer = require('nodemailer'); // Para enviar emails
+const multer = require('multer'); // Para fazer upload de arquivos
 
 const app = express();
 const port = 5000;
@@ -30,12 +31,16 @@ db.connect((err) => {
 });
 
 const transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    auth: {
-        user: 'abel72@ethereal.email',
-        pass: 'zu9KRNp383SvE2h4MF'
-    }
+  host: 'localhost',
+  port: 1025, // porta do MailDev
+  secure: false,
+  auth: {
+    user: null,
+    pass: null
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
 const JWT_SECRET = 'meusegredoabc'; // Mantenha seguro e fora do código em produção
@@ -66,22 +71,97 @@ function authenticate(req, res, next) {
 }
 
 // Endpoint para pegar jogos
-app.get("/api/jogos", (req, res) => {
-  const query = "SELECT * FROM jogos";
-  db.query(query, (err, results) => {
+app.get("/api/jogos", authenticate, (req, res) => {
+  const query = "SELECT * FROM jogos WHERE userId = ?";
+  db.query(query, [req.userId], (err, results) => {
     if (err) return res.status(500).json({ error: "Erro ao buscar jogos" });
     res.json(results);
   });
 });
 
 // Inserir novo jogo
-app.post("/api/jogos", (req, res) => {
-  const { nome, ano, genero, imagem } = req.body;
-  const query = "INSERT INTO jogos (nome, ano, genero, imagem) VALUES (?, ?, ?, ?)";
-  db.query(query, [nome, ano, genero, imagem], (err, result) => {
-    if (err) return res.status(500).json({ error: "Erro ao inserir jogo" });
-    res.status(201).json({ message: "Jogo criado com sucesso!", id: result.insertId });
-  });
+app.post("/api/jogos", authenticate, upload.single('imagem'), async (req, res) => {
+  const { titulo, descricao, categorias } = req.body;
+  const imagemUrl = req.file ? req.file.filename : null;
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Inserir jogo
+    const [result] = await conn.query(
+      "INSERT INTO jogos (titulo, descricao, imagem_url, usuario_id) VALUES (?, ?, ?, ?)",
+      [titulo, descricao, imagemUrl, req.user.id]
+    );
+
+    const jogoId = result.insertId;
+
+    // Inserir categorias do jogo
+    if (categorias) {
+      const categoriasArray = JSON.parse(categorias);
+      for (const categoriaId of categoriasArray) {
+        await conn.query(
+          "INSERT INTO jogo_categorias (jogo_id, categoria_id) VALUES (?, ?)",
+          [jogoId, categoriaId]
+        );
+      }
+    }
+
+    await conn.commit();
+    res.status(201).json({
+      message: "Jogo criado com sucesso",
+      toast: {
+        message: "Jogo criado com sucesso!",
+        type: "success"
+      }
+    });
+  } catch (error) {
+    await conn.rollback();
+    console.error("Erro ao criar jogo:", error);
+    res.status(500).json({
+      error: "Erro ao criar jogo",
+      toast: {
+        message: "Erro ao criar jogo",
+        type: "error"
+      }
+    });
+  } finally {
+    conn.release();
+  }
+});
+
+// Endpoint para buscar jogos com suas categorias
+app.get("/api/jogos", authenticate, async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        j.*,
+        GROUP_CONCAT(DISTINCT c.nome) as categorias,
+        GROUP_CONCAT(DISTINCT c.id) as categoria_ids
+      FROM jogos j
+      LEFT JOIN jogo_categorias jc ON j.id = jc.jogo_id
+      LEFT JOIN categorias c ON jc.categoria_id = c.id
+      GROUP BY j.id
+    `;
+
+    db.query(query, (err, results) => {
+      if (err) {
+        console.error("Erro ao buscar jogos:", err);
+        return res.status(500).json({ error: "Erro ao buscar jogos" });
+      }
+
+      const jogosFormatados = results.map(jogo => ({
+        ...jogo,
+        categorias: jogo.categorias ? jogo.categorias.split(',') : [],
+        categoria_ids: jogo.categoria_ids ? jogo.categoria_ids.split(',').map(Number) : []
+      }));
+
+      res.json(jogosFormatados);
+    });
+  } catch (error) {
+    console.error("Erro ao buscar jogos:", error);
+    res.status(500).json({ error: "Erro ao buscar jogos" });
+  }
 });
 
 // Cadastrar usuário
@@ -93,9 +173,11 @@ app.post("/api/usuarios", async (req, res) => {
   }
 
   try {
-    const hashedPassword = await bcrypt.hash(senha, 10); // Hash da senha
-    const query = "INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)";
-    db.query(query, [nome, email, hashedPassword], (err, result) => {
+    const hashedPassword = await bcrypt.hash(senha, 10);
+    const codigoVerificacao = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const query = "INSERT INTO usuarios (nome, email, senha, codigoVerificacao) VALUES (?, ?, ?, ?)";
+    db.query(query, [nome, email, hashedPassword, codigoVerificacao], async (err, result) => {
       if (err) {
         if (err.code === 'ER_DUP_ENTRY') {
           return res.status(409).json({ error: "Email já cadastrado." });
@@ -103,7 +185,20 @@ app.post("/api/usuarios", async (req, res) => {
         console.error("Erro ao inserir usuário:", err);
         return res.status(500).json({ error: "Erro ao cadastrar usuário" });
       }
-      res.status(201).json({ message: "Usuário cadastrado com sucesso!", id: result.insertId });
+
+      try {
+        await enviarCodigoVerificacao(email, codigoVerificacao);
+        res.status(201).json({
+          message: "Usuário cadastrado com sucesso! Verifique seu email.",
+          id: result.insertId
+        });
+      } catch (emailError) {
+        console.error("Erro ao enviar email:", emailError);
+        res.status(201).json({
+          message: "Usuário cadastrado, mas houve erro ao enviar email de verificação.",
+          id: result.insertId
+        });
+      }
     });
   } catch (error) {
     console.error("Erro ao hashear senha:", error);
@@ -112,42 +207,91 @@ app.post("/api/usuarios", async (req, res) => {
 });
 
 // Login com token JWT
-app.post("/api/login", (req, res) => {
+app.post("/api/login", async (req, res) => {
   const { email, senha } = req.body;
-
-  if (!email || !senha) {
-    return res.status(400).json({ error: "Email e senha são obrigatórios." });
-  }
 
   const query = "SELECT * FROM usuarios WHERE email = ?";
   db.query(query, [email], async (err, results) => {
     if (err) {
       console.error("Erro no login:", err);
-      return res.status(500).json({ error: "Erro interno do servidor" });
+      return res.status(500).json({ 
+        error: "Erro interno do servidor",
+        toast: {
+          message: "Erro ao conectar com o servidor",
+          type: "error"
+        }
+      });
     }
 
     if (results.length === 0) {
-      return res.status(401).json({ error: "Email ou senha inválidos" });
+      return res.status(401).json({ 
+        error: "Email ou senha inválidos",
+        toast: {
+          message: "Email ou senha inválidos",
+          type: "error"
+        }
+      });
     }
 
     const usuario = results[0];
+    const senhaValida = await bcrypt.compare(senha, usuario.senha);
+    
+    if (!senhaValida) {
+      return res.status(401).json({ 
+        error: "Email ou senha inválidos",
+        toast: {
+          message: "Email ou senha inválidos",
+          type: "error"
+        }
+      });
+    }
 
-    try {
-      const senhaValida = await bcrypt.compare(senha, usuario.senha); // Compara senha com hash
-      if (!senhaValida) {
-        return res.status(401).json({ error: "Email ou senha inválidos" });
+    // Gera código de verificação
+    const codigoVerificacao = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    const updateQuery = "UPDATE usuarios SET codigoVerificacao = ? WHERE id = ?";
+    db.query(updateQuery, [codigoVerificacao, usuario.id], async (updateErr) => {
+      if (updateErr) {
+        return res.status(500).json({ 
+          error: "Erro interno do servidor",
+          toast: {
+            message: "Erro ao gerar código de verificação",
+            type: "error"
+          }
+        });
       }
 
-      const token = generateToken(usuario.id, usuario.email);
-      res.status(200).json({
-        message: "Login realizado com sucesso",
-        token,
-        id: usuario.id
-      });
-    } catch (error) {
-      console.error("Erro ao comparar senhas:", error);
-      res.status(500).json({ error: "Erro interno do servidor" });
-    }
+      try {
+        await transporter.sendMail({
+          from: '"GameVerse" <no-reply@gameverse.com>',
+          to: email,
+          subject: 'Código de Verificação - GameVerse',
+          html: `
+            <h1>Código de Verificação</h1>
+            <p>Seu código de verificação é: <strong>${codigoVerificacao}</strong></p>
+            <p>Use este código para completar seu login.</p>
+          `
+        });
+
+        res.status(200).json({
+          message: "Código de verificação enviado para seu email",
+          requireVerification: true,
+          userId: usuario.id,
+          toast: {
+            message: "Código de verificação enviado para seu email",
+            type: "success"
+          }
+        });
+      } catch (emailError) {
+        res.status(500).json({ 
+          error: "Erro ao enviar código de verificação",
+          toast: {
+            message: "Erro ao enviar código de verificação",
+            type: "error"
+          }
+        });
+      }
+    });
   });
 });
 
@@ -183,8 +327,7 @@ app.post("/api/redefinir-senha", (req, res) => { // Mantendo o nome do endpoint 
         return res.status(500).json({ message: "Erro ao processar sua solicitação." });
       }
 
-      // Construir o link de redefinição
-      // Substitua 'http://localhost:3000' pelo URL do seu frontend
+    
       const resetLink = `http://localhost:3000/resetar-senha-confirmacao/${resetToken}`;
 
       // Configurações do email
@@ -316,20 +459,20 @@ app.post('/api/usuario', (req, res) => {
 app.put("/api/jogos/:id", authenticate, (req, res) => {
   const { id } = req.params;
   const { nome, ano, genero, imagem } = req.body;
+  const userId = req.userId;
 
   const query = `
     UPDATE jogos 
     SET nome = ?, ano = ?, genero = ?, imagem = ?
-    WHERE id = ?
+    WHERE id = ? AND userId = ?
   `;
 
-  db.query(query, [nome, ano, genero, imagem, id], (err, result) => {
+  db.query(query, [nome, ano, genero, imagem, id, userId], (err, result) => {
     if (err) return res.status(500).json({ error: "Erro ao atualizar jogo" });
     if (result.affectedRows === 0) return res.status(404).json({ error: "Jogo não encontrado" });
 
-    // Buscar o jogo atualizado
-    const selectQuery = "SELECT * FROM jogos WHERE id = ?";
-    db.query(selectQuery, [id], (err, rows) => {
+    const selectQuery = "SELECT * FROM jogos WHERE id = ? AND userId = ?";
+    db.query(selectQuery, [id, userId], (err, rows) => {
       if (err) return res.status(500).json({ error: "Erro ao buscar jogo atualizado" });
       res.status(200).json(rows[0]);
     });
@@ -338,10 +481,11 @@ app.put("/api/jogos/:id", authenticate, (req, res) => {
 
 app.delete("/api/jogos/:id", authenticate, (req, res) => {
   const { id } = req.params;
+  const userId = req.userId;
 
-  const query = "DELETE FROM jogos WHERE id = ?";
+  const query = "DELETE FROM jogos WHERE id = ? AND userId = ?";
 
-  db.query(query, [id], (err, result) => {
+  db.query(query, [id, userId], (err, result) => {
     if (err) return res.status(500).json({ error: "Erro ao deletar jogo" });
     if (result.affectedRows === 0) return res.status(404).json({ error: "Jogo não encontrado" });
 
@@ -349,6 +493,216 @@ app.delete("/api/jogos/:id", authenticate, (req, res) => {
   });
 });
 
+// Adicione estes endpoints após os existentes
+
+// Listar todos os usuários
+app.get("/api/usuarios", authenticate, (req, res) => {
+  const query = "SELECT id, nome, email FROM usuarios";
+  db.query(query, (err, results) => {
+    if (err) return res.status(500).json({ error: "Erro ao buscar usuários" });
+    res.json(results);
+  });
+});
+
+// Deletar usuário
+app.delete("/api/usuarios/:id", authenticate, (req, res) => {
+  const { id } = req.params;
+  const query = "DELETE FROM usuarios WHERE id = ?";
+  
+  db.query(query, [id], (err, result) => {
+    if (err) return res.status(500).json({ error: "Erro ao deletar usuário" });
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Usuário não encontrado" });
+    res.status(200).json({ message: "Usuário deletado com sucesso" });
+  });
+});
+
+// Atualizar usuário
+app.put("/api/usuarios/:id", authenticate, (req, res) => {
+  const { id } = req.params;
+  const { nome, email } = req.body;
+  
+  const query = "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?";
+  db.query(query, [nome, email, id], (err, result) => {
+    if (err) return res.status(500).json({ error: "Erro ao atualizar usuário" });
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Usuário não encontrado" });
+    
+    // Retorna os dados atualizados
+    const selectQuery = "SELECT id, nome, email FROM usuarios WHERE id = ?";
+    db.query(selectQuery, [id], (err, rows) => {
+      if (err) return res.status(500).json({ error: "Erro ao buscar usuário atualizado" });
+      res.status(200).json(rows[0]);
+    });
+  });
+});
+
+app.post('/api/verificar-codigo', async (req, res) => {
+  const { email, codigo } = req.body;  // Espera email e codigo
+
+  const query = "SELECT * FROM usuarios WHERE email = ? AND codigoVerificacao = ?";
+  db.query(query, [email, codigo], async (err, results) => {
+    if (err) {
+      console.error("Erro ao verificar código:", err);
+      return res.status(500).json({ 
+        message: 'Erro ao verificar código',
+        toast: {
+          message: 'Erro ao verificar código',
+          type: 'error'
+        }
+      });
+    }
+
+    if (results.length === 0) {
+      return res.status(400).json({ 
+        message: 'Código inválido',
+        toast: {
+          message: 'Código inválido',
+          type: 'error'
+        }
+      });
+    }
+
+    const usuario = results[0];
+    const updateQuery = "UPDATE usuarios SET verificado = true, codigoVerificacao = NULL WHERE id = ?";
+    
+    db.query(updateQuery, [usuario.id], (updateErr) => {
+      if (updateErr) {
+        console.error("Erro ao atualizar verificação:", updateErr);
+        return res.status(500).json({ 
+          message: 'Erro ao verificar código',
+          toast: {
+            message: 'Erro ao verificar código',
+            type: 'error'
+          }
+        });
+      }
+
+      const token = generateToken(usuario.id, usuario.email);
+      
+      res.status(200).json({
+        message: 'Email verificado com sucesso',
+        token,
+        id: usuario.id,
+        toast: {
+          message: 'Email verificado com sucesso',
+          type: 'success'
+        }
+      });
+    });
+  });
+});
+
+// Listar todas as categorias
+app.get("/api/categorias", authenticate, (req, res) => {
+  const query = "SELECT * FROM categorias ORDER BY nome";
+  
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Erro ao buscar categorias:", err);
+      return res.status(500).json({ 
+        error: "Erro ao buscar categorias",
+        toast: {
+          message: "Erro ao carregar categorias",
+          type: "error"
+        }
+      });
+    }
+    res.json(results);
+  });
+});
+
+// Criar categoria
+app.post("/api/categorias", authenticate, (req, res) => {
+  const { nome, descricao } = req.body;
+
+  if (!nome) {
+    return res.status(400).json({
+      error: "Nome é obrigatório",
+      toast: {
+        message: "Nome da categoria é obrigatório",
+        type: "error"
+      }
+    });
+  }
+
+  const query = "INSERT INTO categorias (nome, descricao) VALUES (?, ?)";
+  db.query(query, [nome, descricao], (err, result) => {
+    if (err) {
+      console.error("Erro ao criar categoria:", err);
+      return res.status(500).json({
+        error: "Erro ao criar categoria",
+        toast: {
+          message: "Erro ao criar categoria",
+          type: "error"
+        }
+      });
+    }
+
+    res.status(201).json({
+      id: result.insertId,
+      nome,
+      descricao,
+      toast: {
+        message: "Categoria criada com sucesso!",
+        type: "success"
+      }
+    });
+  });
+});
+
+// Atualizar categoria
+app.put("/api/categorias/:id", authenticate, (req, res) => {
+  const { id } = req.params;
+  const { nome, descricao } = req.body;
+
+  const query = "UPDATE categorias SET nome = ?, descricao = ? WHERE id = ?";
+  db.query(query, [nome, descricao, id], (err, result) => {
+    if (err) {
+      console.error("Erro ao atualizar categoria:", err);
+      return res.status(500).json({
+        error: "Erro ao atualizar categoria",
+        toast: {
+          message: "Erro ao atualizar categoria",
+          type: "error"
+        }
+      });
+    }
+
+    res.json({
+      message: "Categoria atualizada com sucesso",
+      toast: {
+        message: "Categoria atualizada com sucesso!",
+        type: "success"
+      }
+    });
+  });
+});
+
+// Deletar categoria
+app.delete("/api/categorias/:id", authenticate, (req, res) => {
+  const { id } = req.params;
+
+  const query = "DELETE FROM categorias WHERE id = ?";
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error("Erro ao deletar categoria:", err);
+      return res.status(500).json({
+        error: "Erro ao deletar categoria",
+        toast: {
+          message: "Erro ao deletar categoria",
+          type: "error"
+        }
+      });
+    }
+
+    res.json({
+      message: "Categoria deletada com sucesso",
+      toast: {
+        message: "Categoria deletada com sucesso!",
+        type: "success"
+      }
+    });
+  });
+});
 
 // Inicia o servidor
 app.listen(port, () => {

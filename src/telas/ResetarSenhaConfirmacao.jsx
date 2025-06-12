@@ -1,27 +1,37 @@
 // componentes/ResetarSenhaConfirmacao.jsx
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import '../login.css'; // Reutilize ou crie um CSS específico
+import ToastAlert from '../componentes/Toast'; // Update import path
+import '../componentes/style.css';
 
 function ResetarSenhaConfirmacao() {
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarNovaSenha, setConfirmarNovaSenha] = useState('');
-  const [mensagem, setMensagem] = useState('');
-  const [erro, setErro] = useState('');
-  const { token } = useParams(); // Pega o token da URL
+  const [toast, setToast] = useState({
+    show: false,
+    message: '',
+    type: 'error'
+  });
+  const { token } = useParams();
   const navigate = useNavigate();
+
+  const showToast = (message, type = 'error') => {
+    setToast({ show: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, show: false }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMensagem('');
-    setErro('');
 
     if (novaSenha !== confirmarNovaSenha) {
-      setErro('As senhas não coincidem.');
+      showToast('As senhas não coincidem.');
       return;
     }
     if (novaSenha.length < 6) {
-      setErro('A nova senha deve ter pelo menos 6 caracteres.');
+      showToast('A nova senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
@@ -35,57 +45,88 @@ function ResetarSenhaConfirmacao() {
       const data = await response.json();
 
       if (response.ok) {
-        setMensagem(data.message + " Você será redirecionado para o login em breve.");
+        showToast(data.message + " Você será redirecionado para o login em breve.", 'success');
         setTimeout(() => {
           navigate('/login');
         }, 3000);
       } else {
-        setErro(data.message || 'Não foi possível redefinir a senha. O link pode ter expirado.');
+        showToast(data.message || 'Não foi possível redefinir a senha. O link pode ter expirado.');
       }
     } catch (error) {
-      setErro('Erro de conexão com o servidor.');
-      console.error(error);
+      showToast('Erro de conexão com o servidor.');
     }
   };
 
   return (
-    <section>
-      {[...Array(200)].map((_, i) => (
-        <span key={i}></span>
-      ))}
-      <div className="signin">
-        <div className="content">
+    <div className="wrapper2">
+      <div className="login-box text-center">
+        <form onSubmit={handleSubmit}>
           <h2>Redefinir sua Senha</h2>
-          <form className="form" onSubmit={handleSubmit}>
-            <div className="inputBox">
+
+          <ToastAlert 
+            show={toast.show}
+            message={toast.message}
+            type={toast.type}
+            onClose={hideToast}
+          />
+
+          <div className="element-box">
+            <div className="input-box">
               <input
                 type="password"
                 required
                 placeholder=" "
                 value={novaSenha}
                 onChange={(e) => setNovaSenha(e.target.value)}
+                style={{ color: "#fff", background: "transparent" }}
               />
-              <i>Nova Senha</i>
+              <label>Nova Senha</label>
             </div>
-            <div className="inputBox">
+          </div>
+          <div className="element-box">
+            <div className="input-box">
               <input
                 type="password"
                 required
                 placeholder=" "
                 value={confirmarNovaSenha}
                 onChange={(e) => setConfirmarNovaSenha(e.target.value)}
+                style={{ color: "#fff", background: "transparent" }}
               />
-              <i>Confirmar Nova Senha</i>
+              <label>Confirmar Nova Senha</label>
             </div>
-            {erro && <p style={{ color: 'red', textAlign: 'center' }}>{erro}</p>}
-            {mensagem && <p style={{ color: 'green', textAlign: 'center' }}>{mensagem}</p>}
-            <div className="inputBox">
-              <input type="submit" value="Redefinir Senha" />
-            </div>
-          </form>
-        </div>
+          </div>
+
+          <div className="element-box flex justify-between">
+            <button
+              type="button"
+              className="text-white underline bg-transparent border-none"
+              style={{ background: "transparent", boxShadow: "none" }}
+              onClick={() => navigate('/login')}
+            >
+              Voltar para o Login
+            </button>
+            <button
+              type="button"
+              className="text-white underline bg-transparent border-none"
+              style={{ background: "transparent", boxShadow: "none" }}
+              onClick={() => navigate('/cadastro')}
+            >
+              Cadastre-se
+            </button>
+          </div>
+
+          <div className="element-box">
+            <button
+              type="submit"
+              className="w-40 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            >
+              Redefinir Senha
+            </button>
+          </div>
+        </form>
       </div>
-    </section>
+    </div>
   );
 }
 
