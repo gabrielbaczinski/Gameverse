@@ -2,16 +2,56 @@ const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const bcrypt = require('bcryptjs'); // Para hashear senhas
-const crypto = require('crypto');   // Para gerar tokens de redefinição
-const nodemailer = require('nodemailer'); // Para enviar emails
-const multer = require('multer'); // Para fazer upload de arquivos
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // Create uploads directory if it doesn't exist
+    const dir = './uploads';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+// Create multer instance with configuration
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Allow only specific image formats
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      const error = new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.');
+      error.code = 'INVALID_FILE_TYPE';
+      return cb(error, false);
+    }
+    cb(null, true);
+  }
+});
 
 const app = express();
 const port = 5000;
 
 app.use(cors());
 app.use(express.json()); // Necessário para interpretar JSON no body da requisição
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Configuração do banco de dados
 const db = mysql.createConnection({
@@ -72,92 +112,138 @@ function authenticate(req, res, next) {
 
 // Endpoint para pegar jogos
 app.get("/api/jogos", authenticate, (req, res) => {
-  const query = "SELECT * FROM jogos WHERE userId = ?";
-  db.query(query, [req.userId], (err, results) => {
-    if (err) return res.status(500).json({ error: "Erro ao buscar jogos" });
-    res.json(results);
-  });
+  try {
+    // 1. Buscar todos os jogos do usuário
+    db.query(
+      "SELECT * FROM jogos WHERE userId = ?",
+      [req.userId],
+      (err, jogos) => {
+        if (err) {
+          console.error("Erro ao buscar jogos:", err);
+          return res.status(500).json({ message: "Erro ao buscar jogos" });
+        }
+
+        // Se não há jogos, retorne uma array vazia
+        if (jogos.length === 0) {
+          return res.json([]);
+        }
+
+        // 2. Para cada jogo, buscar suas categorias
+        let processed = 0;
+        jogos.forEach((jogo) => {
+          // Observe o nome correto da tabela: jogo_categorias (singular)
+          db.query(
+            `SELECT c.nome 
+             FROM jogo_categorias jc 
+             JOIN categorias c ON jc.categoria_id = c.id 
+             WHERE jc.jogo_id = ?`,
+            [jogo.id],
+            (err, categorias) => {
+              processed++;
+
+              // Adicionar array de categorias ao jogo
+              if (err) {
+                console.error(`Erro ao buscar categorias do jogo ${jogo.id}:`, err);
+                jogo.categorias = [];
+              } else {
+                jogo.categorias = categorias.map(c => c.nome);
+              }
+
+              // Quando todos os jogos tiverem sido processados, enviar resposta
+              if (processed === jogos.length) {
+                res.json(jogos);
+              }
+            }
+          );
+        });
+      }
+    );
+  } catch (error) {
+    console.error("Erro ao buscar jogos:", error);
+    res.status(500).json({ message: "Erro ao buscar jogos" });
+  }
 });
 
-// Inserir novo jogo
+// Substitua o endpoint POST /api/jogos existente:
+
 app.post("/api/jogos", authenticate, upload.single('imagem'), async (req, res) => {
-  const { titulo, descricao, categorias } = req.body;
-  const imagemUrl = req.file ? req.file.filename : null;
-
-  const conn = await db.getConnection();
   try {
-    await conn.beginTransaction();
-
-    // Inserir jogo
-    const [result] = await conn.query(
-      "INSERT INTO jogos (titulo, descricao, imagem_url, usuario_id) VALUES (?, ?, ?, ?)",
-      [titulo, descricao, imagemUrl, req.user.id]
-    );
-
-    const jogoId = result.insertId;
-
-    // Inserir categorias do jogo
-    if (categorias) {
-      const categoriasArray = JSON.parse(categorias);
-      for (const categoriaId of categoriasArray) {
-        await conn.query(
-          "INSERT INTO jogo_categorias (jogo_id, categoria_id) VALUES (?, ?)",
-          [jogoId, categoriaId]
-        );
-      }
+    console.log("Dados recebidos:", req.body);
+    console.log("Dados do usuário:", req.userId);
+    
+    const { nome, ano, genero, imagemUrl } = req.body;
+    
+    // Determinar o caminho da imagem
+    let imagem;
+    if (req.file) {
+      // Caso de upload de arquivo
+      imagem = `/uploads/${req.file.filename}`;
+      console.log("Usando arquivo enviado:", imagem);
+    } else if (imagemUrl) {
+      // Caso de URL externa
+      imagem = imagemUrl;
+      console.log("Usando URL externa:", imagem);
+    } else {
+      return res.status(400).json({
+        message: "É necessário fornecer uma imagem ou URL",
+        type: "error"
+      });
     }
 
-    await conn.commit();
-    res.status(201).json({
-      message: "Jogo criado com sucesso",
-      toast: {
-        message: "Jogo criado com sucesso!",
-        type: "success"
+    // Validação de campos obrigatórios
+    if (!nome || !ano || !genero) {
+      return res.status(400).json({
+        message: "Nome, ano e gênero são obrigatórios",
+        type: "error"
+      });
+    }
+
+    // Inserir dados no banco
+    const query = "INSERT INTO jogos (nome, ano, genero, imagem, userId) VALUES (?, ?, ?, ?, ?)";
+    
+    db.query(query, [nome, ano, genero, imagem, req.userId], (err, result) => {
+      if (err) {
+        console.error("Erro SQL:", err);
+        return res.status(500).json({
+          message: "Erro ao inserir jogo no banco: " + err.message,
+          type: "error"
+        });
       }
+
+      console.log("Jogo inserido com sucesso, ID:", result.insertId);
+      return res.status(201).json({
+        message: "Jogo criado com sucesso!",
+        id: result.insertId,
+        type: "success"
+      });
     });
   } catch (error) {
-    await conn.rollback();
-    console.error("Erro ao criar jogo:", error);
-    res.status(500).json({
-      error: "Erro ao criar jogo",
-      toast: {
-        message: "Erro ao criar jogo",
-        type: "error"
-      }
+    console.error("Erro geral:", error);
+    return res.status(500).json({
+      message: "Erro interno no servidor",
+      type: "error"
     });
-  } finally {
-    conn.release();
   }
 });
 
 // Endpoint para buscar jogos com suas categorias
 app.get("/api/jogos", authenticate, async (req, res) => {
   try {
-    const query = `
-      SELECT 
-        j.*,
-        GROUP_CONCAT(DISTINCT c.nome) as categorias,
-        GROUP_CONCAT(DISTINCT c.id) as categoria_ids
+    const conn = await pool.getConnection();
+    const [jogos] = await conn.query(`
+      SELECT j.*, 
+        GROUP_CONCAT(c.nome) as categorias
       FROM jogos j
-      LEFT JOIN jogo_categorias jc ON j.id = jc.jogo_id
+      LEFT JOIN jogos_categorias jc ON j.id = jc.jogo_id
       LEFT JOIN categorias c ON jc.categoria_id = c.id
+      WHERE j.userId = ?
       GROUP BY j.id
-    `;
+    `, [req.userId]);
 
-    db.query(query, (err, results) => {
-      if (err) {
-        console.error("Erro ao buscar jogos:", err);
-        return res.status(500).json({ error: "Erro ao buscar jogos" });
-      }
-
-      const jogosFormatados = results.map(jogo => ({
-        ...jogo,
-        categorias: jogo.categorias ? jogo.categorias.split(',') : [],
-        categoria_ids: jogo.categoria_ids ? jogo.categoria_ids.split(',').map(Number) : []
-      }));
-
-      res.json(jogosFormatados);
-    });
+    res.json(jogos.map(jogo => ({
+      ...jogo,
+      categorias: jogo.categorias ? jogo.categorias.split(',') : []
+    })));
   } catch (error) {
     console.error("Erro ao buscar jogos:", error);
     res.status(500).json({ error: "Erro ao buscar jogos" });
@@ -456,26 +542,89 @@ app.post('/api/usuario', (req, res) => {
   }
 });
 
-app.put("/api/jogos/:id", authenticate, (req, res) => {
+app.put("/api/jogos/:id", authenticate, upload.single('imagem'), (req, res) => {
   const { id } = req.params;
-  const { nome, ano, genero, imagem } = req.body;
-  const userId = req.userId;
+  const { nome, ano, genero } = req.body;
 
-  const query = `
-    UPDATE jogos 
-    SET nome = ?, ano = ?, genero = ?, imagem = ?
-    WHERE id = ? AND userId = ?
-  `;
+  let sql = "UPDATE jogos SET nome = ?, ano = ?, genero = ?";
+  let values = [nome, ano, genero];
 
-  db.query(query, [nome, ano, genero, imagem, id, userId], (err, result) => {
-    if (err) return res.status(500).json({ error: "Erro ao atualizar jogo" });
-    if (result.affectedRows === 0) return res.status(404).json({ error: "Jogo não encontrado" });
+  if (req.file) {
+    sql += ", imagem = ?";
+    values.push(`/uploads/${req.file.filename}`);
+  }
 
-    const selectQuery = "SELECT * FROM jogos WHERE id = ? AND userId = ?";
-    db.query(selectQuery, [id, userId], (err, rows) => {
-      if (err) return res.status(500).json({ error: "Erro ao buscar jogo atualizado" });
-      res.status(200).json(rows[0]);
+  sql += " WHERE id = ?";
+  values.push(id);
+
+  db.query(sql, values, (err, result) => {
+    if (err) {
+      console.error("Erro ao atualizar jogo:", err);
+      return res.status(500).json({ 
+        error: "Erro ao atualizar jogo",
+        toast: {
+          message: "Erro ao atualizar jogo",
+          type: "error"
+        }
+      });
+    }
+
+    // Após atualizar, buscar o jogo atualizado
+    const selectSql = `
+      SELECT j.*, GROUP_CONCAT(c.nome) as categorias 
+      FROM jogos j
+      LEFT JOIN jogo_categorias jc ON j.id = jc.jogo_id
+      LEFT JOIN categorias c ON jc.categoria_id = c.id
+      WHERE j.id = ?
+      GROUP BY j.id
+    `;
+
+    db.query(selectSql, [id], (err, rows) => {
+      if (err) {
+        console.error("Erro ao buscar jogo atualizado:", err);
+        return res.status(500).json({
+          error: "Erro ao buscar jogo atualizado",
+          toast: {
+            message: "Erro ao buscar jogo atualizado",
+            type: "error"
+          }
+        });
+      }
+
+      const jogoAtualizado = {
+        ...rows[0],
+        categorias: rows[0].categorias ? rows[0].categorias.split(',') : []
+      };
+
+      res.json({
+        ...jogoAtualizado,
+        toast: {
+          message: "Jogo atualizado com sucesso!",
+          type: "success"
+        }
+      });
     });
+  });
+});
+
+// Add category to game - simple and direct
+app.post("/api/jogos/:id/categorias", authenticate, (req, res) => {
+  const { id } = req.params;
+  const { categorias } = req.body;
+
+  if (!categorias || !Array.isArray(categorias)) {
+    return res.status(400).json({ error: "Categorias inválidas" });
+  }
+
+  const sql = "INSERT INTO jogo_categorias (jogo_id, categoria_id) VALUES (?, ?)";
+  
+  db.query(sql, [id, categorias[0]], (err, result) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Erro ao adicionar categoria" });
+    }
+
+    res.json({ message: "Categoria adicionada com sucesso" });
   });
 });
 
@@ -519,18 +668,40 @@ app.delete("/api/usuarios/:id", authenticate, (req, res) => {
 // Atualizar usuário
 app.put("/api/usuarios/:id", authenticate, (req, res) => {
   const { id } = req.params;
-  const { nome, email } = req.body;
-  
-  const query = "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?";
-  db.query(query, [nome, email, id], (err, result) => {
-    if (err) return res.status(500).json({ error: "Erro ao atualizar usuário" });
-    if (result.affectedRows === 0) return res.status(404).json({ error: "Usuário não encontrado" });
-    
-    // Retorna os dados atualizados
-    const selectQuery = "SELECT id, nome, email FROM usuarios WHERE id = ?";
-    db.query(selectQuery, [id], (err, rows) => {
-      if (err) return res.status(500).json({ error: "Erro ao buscar usuário atualizado" });
-      res.status(200).json(rows[0]);
+  const { nome, email, senha } = req.body;
+
+  // Start with basic fields
+  let sql = "UPDATE usuarios SET nome = ?, email = ?";
+  let values = [nome, email];
+
+  // If password is provided, update it too
+  if (senha && senha.trim() !== '') {
+    sql += ", senha = ?";
+    const hashedPassword = bcrypt.hashSync(senha, 10);
+    values.push(hashedPassword);
+  }
+
+  sql += " WHERE id = ?";
+  values.push(id);
+
+  db.query(sql, values, (err, result) => {
+    if (err) {
+      console.error("Erro ao atualizar usuário:", err);
+      return res.status(500).json({ 
+        error: "Erro ao atualizar usuário",
+        toast: {
+          message: "Erro ao atualizar usuário",
+          type: "error"
+        }
+      });
+    }
+
+    res.json({ 
+      message: "Usuário atualizado com sucesso",
+      toast: {
+        message: "Usuário atualizado com sucesso!",
+        type: "success"
+      }
     });
   });
 });
@@ -611,9 +782,9 @@ app.get("/api/categorias", authenticate, (req, res) => {
 });
 
 // Criar categoria
-app.post("/api/categorias", authenticate, (req, res) => {
-  const { nome, descricao } = req.body;
-
+app.post("/api/categorias", authenticate, async (req, res) => {
+  const { nome } = req.body;
+  
   if (!nome) {
     return res.status(400).json({
       error: "Nome é obrigatório",
@@ -624,8 +795,8 @@ app.post("/api/categorias", authenticate, (req, res) => {
     });
   }
 
-  const query = "INSERT INTO categorias (nome, descricao) VALUES (?, ?)";
-  db.query(query, [nome, descricao], (err, result) => {
+  const query = "INSERT INTO categorias (nome) VALUES (?)";
+  db.query(query, [nome], (err, result) => {
     if (err) {
       console.error("Erro ao criar categoria:", err);
       return res.status(500).json({
@@ -640,7 +811,6 @@ app.post("/api/categorias", authenticate, (req, res) => {
     res.status(201).json({
       id: result.insertId,
       nome,
-      descricao,
       toast: {
         message: "Categoria criada com sucesso!",
         type: "success"
@@ -652,16 +822,36 @@ app.post("/api/categorias", authenticate, (req, res) => {
 // Atualizar categoria
 app.put("/api/categorias/:id", authenticate, (req, res) => {
   const { id } = req.params;
-  const { nome, descricao } = req.body;
+  const { nome } = req.body;
 
-  const query = "UPDATE categorias SET nome = ?, descricao = ? WHERE id = ?";
-  db.query(query, [nome, descricao, id], (err, result) => {
+  if (!nome) {
+    return res.status(400).json({
+      error: "Nome é obrigatório",
+      toast: {
+        message: "Nome da categoria é obrigatório",
+        type: "error"
+      }
+    });
+  }
+
+  const query = "UPDATE categorias SET nome = ? WHERE id = ?";
+  db.query(query, [nome, id], (err, result) => {
     if (err) {
       console.error("Erro ao atualizar categoria:", err);
       return res.status(500).json({
         error: "Erro ao atualizar categoria",
         toast: {
           message: "Erro ao atualizar categoria",
+          type: "error"
+        }
+      });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: "Categoria não encontrada",
+        toast: {
+          message: "Categoria não encontrada",
           type: "error"
         }
       });
@@ -681,27 +871,85 @@ app.put("/api/categorias/:id", authenticate, (req, res) => {
 app.delete("/api/categorias/:id", authenticate, (req, res) => {
   const { id } = req.params;
 
+  // Removi o filtro por usuario_id pois não existe na tabela
   const query = "DELETE FROM categorias WHERE id = ?";
   db.query(query, [id], (err, result) => {
     if (err) {
-      console.error("Erro ao deletar categoria:", err);
+      console.error("Erro ao excluir categoria:", err);
       return res.status(500).json({
-        error: "Erro ao deletar categoria",
+        error: "Erro ao excluir categoria",
         toast: {
-          message: "Erro ao deletar categoria",
+          message: "Erro ao excluir categoria",
+          type: "error"
+        }
+      });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: "Categoria não encontrada",
+        toast: {
+          message: "Categoria não encontrada",
           type: "error"
         }
       });
     }
 
     res.json({
-      message: "Categoria deletada com sucesso",
+      message: "Categoria excluída com sucesso",
       toast: {
-        message: "Categoria deletada com sucesso!",
+        message: "Categoria excluída com sucesso!",
         type: "success"
       }
     });
   });
+});
+
+// Adicionar categoria a um jogo
+app.post("/api/jogos/:id/categorias", authenticate, (req, res) => {
+  const { id } = req.params;
+  const { categorias } = req.body;
+
+  if (!categorias || !Array.isArray(categorias)) {
+    return res.status(400).json({ error: "Categorias inválidas" });
+  }
+
+  const sql = "INSERT INTO jogo_categorias (jogo_id, categoria_id) VALUES (?, ?)";
+  
+  db.query(sql, [id, categorias[0]], (err, result) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Erro ao adicionar categoria" });
+    }
+
+    res.json({ message: "Categoria adicionada com sucesso" });
+  });
+});
+
+// Buscar jogos por categoria
+app.get("/api/categorias/:id/jogos", authenticate, async (req, res) => {
+  const { id } = req.params;
+  
+  const conn = await db.getConnection();
+  try {
+    const [jogos] = await conn.query(`
+      SELECT j.*, GROUP_CONCAT(c.nome) as categorias
+      FROM jogos j
+      INNER JOIN jogo_categorias jc ON j.id = jc.jogo_id
+      INNER JOIN categorias c ON jc.categoria_id = c.id
+      WHERE jc.categoria_id = ?
+      GROUP BY j.id
+    `, [id]);
+
+    res.json(jogos.map(jogo => ({
+      ...jogo,
+      categorias: jogo.categorias ? jogo.categorias.split(',') : []
+    })));
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar jogos da categoria" });
+  } finally {
+    conn.release();
+  }
 });
 
 // Inicia o servidor

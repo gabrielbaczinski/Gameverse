@@ -1,39 +1,54 @@
-import React, { Fragment } from 'react';
+import React, { Fragment, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Transition } from '@headlessui/react';
 import { CheckCircleIcon, XCircleIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
-export default function ToastAlert({ show, message, type, onClose }) {
-  return (
+export default function ToastAlert({ show, message, type, onClose, duration = 5000 }) {
+  // Auto-fechamento após o tempo definido
+  useEffect(() => {
+    if (show) {
+      const timer = setTimeout(() => {
+        if (onClose) onClose();
+      }, duration);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [show, onClose, duration]);
+
+  return ReactDOM.createPortal(
     <Transition
       show={show}
       as={Fragment}
       enter="transform ease-out duration-300 transition"
-      enterFrom="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
-      enterTo="translate-y-0 opacity-100 sm:translate-x-0"
-      leave="transition ease-in duration-100"
-      leaveFrom="opacity-100"
-      leaveTo="opacity-0"
+      enterFrom="translate-x-full opacity-0"
+      enterTo="translate-x-0 opacity-100"
+      leave="transform ease-in duration-200 transition"
+      leaveFrom="translate-x-0 opacity-100"
+      leaveTo="translate-x-full opacity-0"
     >
-      <div className="fixed bottom-4 right-4 z-[9999] min-w-[350px]">
-        <div className={`toast-alert ${type}`}>
-          <div className="flex-shrink-0">
-            {type === 'success' && <CheckCircleIcon className="h-6 w-6 text-white" />}
-            {type === 'error' && <XCircleIcon className="h-6 w-6 text-white" />}
-            {type === 'info' && <InformationCircleIcon className="h-6 w-6 text-white" />}
+      <div className="toast-container">
+        <div className={`toast-notification toast-${type}`}>
+          <div className="toast-icon">
+            {type === 'success' && <CheckCircleIcon className="h-6 w-6" />}
+            {type === 'error' && <XCircleIcon className="h-6 w-6" />}
+            {(type === 'info' || type === 'warning') && <InformationCircleIcon className="h-6 w-6" />}
           </div>
-          <div className="flex-1">
-            <p className="text-white">{message}</p>
+          <div className="toast-content">
+            <p>{message}</p>
           </div>
-          <div className="flex-shrink-0">
-            <button
-              className="rounded-md text-white hover:opacity-80 focus:outline-none"
-              onClick={onClose}
-            >
-              <XMarkIcon className="h-5 w-5" />
-            </button>
+          <button className="toast-close" onClick={onClose}>
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+          
+          <div className="toast-progress-container">
+            <div 
+              className="toast-progress" 
+              style={{ animationDuration: `${duration}ms` }}
+            ></div>
           </div>
         </div>
       </div>
-    </Transition>
+    </Transition>,
+    document.body
   );
 }

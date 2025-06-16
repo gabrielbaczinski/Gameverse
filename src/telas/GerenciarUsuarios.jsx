@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { IonIcon } from '@ionic/react';
+import { pencil, trash, closeOutline, searchOutline, personOutline, mailOutline, shieldOutline } from 'ionicons/icons';
 import ToastAlert from '../componentes/Toast';
 
 function GerenciarUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
+  const [filteredUsuarios, setFilteredUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [usuarioSelecionado, setUsuarioSelecionado] = useState(null);
+  const [usuarioEditando, setUsuarioEditando] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState({
     show: false,
     message: '',
@@ -17,6 +21,19 @@ function GerenciarUsuarios() {
     carregarUsuarios();
   }, []);
 
+  // Filtra usuários quando o termo de busca muda - CORREÇÃO DO ERRO
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = usuarios.filter(user => 
+        (user.nome?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
+        (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+      );
+      setFilteredUsuarios(filtered);
+    } else {
+      setFilteredUsuarios(usuarios);
+    }
+  }, [searchTerm, usuarios]);
+
   const carregarUsuarios = async () => {
     const token = localStorage.getItem('authToken');
     if (!token) {
@@ -24,6 +41,7 @@ function GerenciarUsuarios() {
       return;
     }
 
+    setLoading(true);
     try {
       const response = await fetch('http://localhost:5000/api/usuarios', {
         headers: { Authorization: `Bearer ${token}` }
@@ -31,7 +49,9 @@ function GerenciarUsuarios() {
       
       if (response.ok) {
         const data = await response.json();
+        console.log("Usuários carregados:", data); // Para debug
         setUsuarios(data);
+        setFilteredUsuarios(data);
       } else {
         setToast({
           show: true,
@@ -50,11 +70,47 @@ function GerenciarUsuarios() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Tem certeza que deseja excluir este usuário?')) return;
-
-    const token = localStorage.getItem('authToken');
+  const iniciarEdicao = async (usuario) => {
     try {
+      const token = localStorage.getItem('authToken');
+      setLoading(true);
+      
+      const response = await fetch(`http://localhost:5000/api/usuarios/${usuario.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const usuarioCompleto = await response.json();
+        setUsuarioEditando({
+          id: usuarioCompleto.id,
+          nome: usuarioCompleto.nome || '',
+          email: usuarioCompleto.email || '',
+          senha: '' // Senha vazia para edição
+        });
+      } else {
+        setToast({
+          show: true,
+          message: 'Erro ao carregar dados do usuário',
+          type: 'error'
+        });
+      }
+    } catch (error) {
+      setToast({
+        show: true,
+        message: 'Erro ao carregar dados para edição',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const token = localStorage.getItem('authToken');
+    if (!window.confirm('Tem certeza que deseja excluir este usuário?')) return;
+    
+    try {
+      setLoading(true);
       const response = await fetch(`http://localhost:5000/api/usuarios/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
@@ -62,6 +118,7 @@ function GerenciarUsuarios() {
 
       if (response.ok) {
         setUsuarios(usuarios.filter(user => user.id !== id));
+        setFilteredUsuarios(filteredUsuarios.filter(user => user.id !== id));
         setToast({
           show: true,
           message: 'Usuário excluído com sucesso',
@@ -80,32 +137,40 @@ function GerenciarUsuarios() {
         message: 'Erro de conexão com o servidor',
         type: 'error'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUpdate = async (id, novosDados) => {
+  const handleEdit = async (e) => {
+    e.preventDefault();
     const token = localStorage.getItem('authToken');
+    
     try {
-      const response = await fetch(`http://localhost:5000/api/usuarios/${id}`, {
+      setLoading(true);
+      const response = await fetch(`http://localhost:5000/api/usuarios/${usuarioEditando.id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}` 
         },
-        body: JSON.stringify(novosDados)
+        body: JSON.stringify(usuarioEditando)
       });
 
       if (response.ok) {
         const usuarioAtualizado = await response.json();
         setUsuarios(usuarios.map(user => 
-          user.id === id ? usuarioAtualizado : user
+          user.id === usuarioAtualizado.id ? usuarioAtualizado : user
         ));
+        setFilteredUsuarios(
+          filteredUsuarios.map(user => user.id === usuarioAtualizado.id ? usuarioAtualizado : user)
+        );
         setToast({
           show: true,
           message: 'Usuário atualizado com sucesso',
           type: 'success'
         });
-        setUsuarioSelecionado(null);
+        setUsuarioEditando(null);
       } else {
         setToast({
           show: true,
@@ -119,71 +184,191 @@ function GerenciarUsuarios() {
         message: 'Erro de conexão com o servidor',
         type: 'error'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) return <div>Carregando...</div>;
-
   return (
-    <div className="wrapper2">
-      <div className="cadastro-box overflow-auto p-6"> {/* Added overflow-auto and padding */}
-        <h1 className="text-3xl font-bold text-white mb-8">
-          Gerenciar Usuários
-        </h1>
-
-        <ToastAlert 
-          show={toast.show}
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(prev => ({ ...prev, show: false }))}
-        />
-
-        <div className="bg-transparent rounded-lg overflow-x-auto"> {/* Made background transparent */}
-          <table className="min-w-full">
-            <thead className="border-b border-gray-600">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">
-                  ID
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">
-                  Email
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">
-                  Ações
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-600">
-              {usuarios.map(usuario => (
-                <tr key={usuario.id}>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-white">
-                    {usuario.id}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-white">
-                    {usuario.nome}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-white">
-                    {usuario.email}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => setUsuarioSelecionado(usuario)}
-                      className="text-blue-400 hover:text-blue-300 mr-4 bg-transparent w-auto h-auto" // Added bg-transparent and adjusted button size
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(usuario.id)}
-                      className="text-red-400 hover:text-red-300 bg-transparent w-auto h-auto" // Added bg-transparent and adjusted button size
-                    >
-                      Excluir
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="wrapper">
+      <div className="jogo-box">
+        <ToastAlert {...toast} onClose={() => setToast(prev => ({ ...prev, show: false }))} />
+        
+        <div className="users-header">
+          <h2>Gerenciar Usuários</h2>
         </div>
+
+        <div className="search-container">
+          <div className="element-box">
+            <div className="input-box" style={{ margin: '0'}}>
+              <input
+                type="text"
+                placeholder=" "
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <label><IonIcon icon={searchOutline} style={{marginRight: '5px'}}/> Buscar usuários</label>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de usuários */}
+        {loading && !usuarioEditando ? (
+          <div className="loading-container">
+            <div className="loader"></div>
+          </div>
+        ) : (
+          <div className="users-list-container">
+            {filteredUsuarios.length > 0 ? (
+              <>
+                <div className="users-list-header">
+                  <div className="user-col id-col">ID</div>
+                  <div className="user-col info-col">Informações</div>
+                  <div className="user-col actions-col">Ações</div>
+                </div>
+                
+                <div className="users-list-body">
+                  {filteredUsuarios.map((usuario) => (
+                    <div key={usuario.id} className="user-row">
+                      <div className="user-col id-col">
+                        <span className="user-id">{usuario.id}</span>
+                      </div>
+                      
+                      <div className="user-col info-col">
+                        <div className="user-info">
+                          <h4 className="user-name">
+                            <IonIcon icon={personOutline} /> 
+                            {usuario.nome || 'Sem nome'}
+                          </h4>
+                          <p className="user-email">
+                            <IonIcon icon={mailOutline} /> 
+                            {usuario.email || 'E-mail não definido'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="user-col actions-col">
+                        <button
+                          onClick={() => iniciarEdicao(usuario)}
+                          className="user-action-btn edit"
+                          title="Editar usuário"
+                        >
+                          <IonIcon icon={pencil} />
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(usuario.id)}
+                          className="user-action-btn delete"
+                          title="Excluir usuário"
+                        >
+                          <IonIcon icon={trash} />
+                          <span>Excluir</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <IonIcon icon={personOutline} className="empty-icon" />
+                <p>Nenhum usuário encontrado</p>
+                <span>Tente ajustar sua busca ou adicione novos usuários</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Modal de edição de usuário */}
+        {usuarioEditando && (
+          <div className="modal-overlay">
+            <div className="user-edit-modal">
+              <button 
+                onClick={() => setUsuarioEditando(null)}
+                className="modal-close-btn"
+                aria-label="Fechar"
+              >
+                <IonIcon icon={closeOutline} />
+              </button>
+
+              <div className="modal-header">
+                <div className="user-avatar">
+                  <IonIcon icon={personOutline} />
+                </div>
+                <h3>Editar Usuário</h3>
+                <p className="modal-subtitle">ID: {usuarioEditando.id}</p>
+              </div>
+
+              <form onSubmit={handleEdit}>
+                <div className="modal-body">
+                  <div className="form-group">
+                    <div className="form-icon">
+                      <IonIcon icon={personOutline} />
+                    </div>
+                    <div className="input-box modal-input">
+                      <input
+                        type="text"
+                        value={usuarioEditando.nome}
+                        onChange={(e) => setUsuarioEditando(prev => ({ ...prev, nome: e.target.value }))}
+                        placeholder=" "
+                        required
+                      />
+                      <label>Nome</label>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <div className="form-icon">
+                      <IonIcon icon={mailOutline} />
+                    </div>
+                    <div className="input-box modal-input">
+                      <input
+                        type="email"
+                        value={usuarioEditando.email}
+                        onChange={(e) => setUsuarioEditando(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder=" "
+                        required
+                      />
+                      <label>Email</label>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <div className="form-icon">
+                      <IonIcon icon={shieldOutline} />
+                    </div>
+                    <div className="input-box modal-input">
+                      <input
+                        type="password"
+                        value={usuarioEditando.senha || ''}
+                        onChange={(e) => setUsuarioEditando(prev => ({ ...prev, senha: e.target.value }))}
+                        placeholder=" "
+                      />
+                      <label>Nova Senha (opcional)</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button 
+                    type="button" 
+                    className="modal-btn cancel"
+                    onClick={() => setUsuarioEditando(null)}
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="modal-btn save"
+                    disabled={loading}
+                  >
+                    {loading ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

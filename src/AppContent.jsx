@@ -44,6 +44,7 @@ function AppContent() {
         <Route path="/redefinirsenha" element={<RedefinirSenha />} />
         <Route path="/resetar-senha-confirmacao/:token" element={<ResetarSenhaConfirmacao />} />
         <Route path="/categorias" element={<GerenciarCategorias />} />
+        <Route path="/usuarios" element={<GerenciarUsuarios />} />
       </Routes>
       <Footer />
     </>

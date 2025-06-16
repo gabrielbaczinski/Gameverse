@@ -1,16 +1,16 @@
 import React from 'react';
-import "./../componentes/style.css"; // Caminho do CSS
+import "./../componentes/style.css";
 
 function TelaHome() {
   return (
-    <div className="wrapper2">
-      <div className="login-box text-center">
+    <div className="wrapper2 min-h-screen flex items-center justify-center p-6">
+      <div className="login-box text-center bg-black bg-opacity-50 p-10 rounded-lg shadow-lg max-w-xl w-full">
         <form>
-          <h2>GameVerse</h2>
+          <h2 className="text-4xl font-bold text-white mb-4">🎮 GameVerse</h2>
 
-          <div className="element-box">
-            <p className="text-white">
-              O melhor lugar para encontrar e jogar os jogos mais emocionantes da internet.
+          <div className="element-box mb-6">
+            <p className="text-white text-lg">
+              Crie seu catálogo personalizado, adicione jogos favoritos e organize por categorias do seu jeito.
             </p>
           </div>
 

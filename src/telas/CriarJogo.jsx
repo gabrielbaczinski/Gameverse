@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { IonIcon } from '@ionic/react';
+import { cloudUploadOutline, globeOutline } from 'ionicons/icons';
 import ToastAlert from '../componentes/Toast';
 
 function CriarJogo() {
@@ -8,16 +10,16 @@ function CriarJogo() {
   const [ano, setAno] = useState('');
   const [genero, setGenero] = useState('');
   const [imagem, setImagem] = useState(null);
+  const [imagemUrl, setImagemUrl] = useState('');
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [tipoImagem, setTipoImagem] = useState('upload'); // 'upload' ou 'url'
   const [toast, setToast] = useState({
     show: false,
     message: '',
     type: 'error'
   });
-  const [categorias, setCategorias] = useState([]);
-  const [categoriaSelecionadas, setCategoriaSelecionadas] = useState([]);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,28 +27,21 @@ function CriarJogo() {
     if (!token) {
       navigate('/login');
     }
-  }, [navigate]); // Verificação do token ao carregar o componente
+  }, [navigate]);
 
-  useEffect(() => {
-    // Carregar categorias disponíveis
-    const carregarCategorias = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/categorias', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          }
-        });
-        const data = await response.json();
-        if (response.ok) {
-          setCategorias(data);
-        }
-      } catch (error) {
-        console.error('Erro ao carregar categorias:', error);
+  // Função para alternar entre os métodos
+  const alternarMetodo = (metodo) => {
+    setTipoImagem(metodo);
+    if (metodo === 'upload') {
+      setImagemUrl('');
+    } else {
+      setImagem(null);
+      if (previewUrl && !previewUrl.startsWith('http')) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
       }
-    };
-
-    carregarCategorias();
-  }, []);
+    }
+  };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -55,7 +50,18 @@ function CriarJogo() {
       // Create preview URL
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      // Resetar URL quando fizer upload
+      setImagemUrl('');
+      setTipoImagem('upload');
     }
+  };
+
+  const handleImageUrlChange = (e) => {
+    const url = e.target.value;
+    setImagemUrl(url);
+    setTipoImagem('url');
+    // Resetar upload quando inserir URL
+    setImagem(null);
   };
 
   const handleSubmit = async (e) => {
@@ -66,10 +72,21 @@ function CriarJogo() {
     formDataToSend.append("nome", nome);
     formDataToSend.append("ano", ano);
     formDataToSend.append("genero", genero);
-    if (imagem) {
+    
+    // Enviar imagem ou URL dependendo da escolha
+    if (tipoImagem === 'upload' && imagem) {
       formDataToSend.append("imagem", imagem);
+    } else if (tipoImagem === 'url' && imagemUrl) {
+      formDataToSend.append("imagemUrl", imagemUrl);
+    } else {
+      setToast({
+        show: true,
+        message: 'Por favor, selecione uma imagem ou forneça uma URL válida.',
+        type: 'error'
+      });
+      return;
     }
-    formDataToSend.append('categorias', JSON.stringify(categoriaSelecionadas));
+    
     setLoading(true);
 
     try {
@@ -80,10 +97,11 @@ function CriarJogo() {
         },
       });
 
-      if (response.status === 200) {
+      // Ajuste aqui: agora aceita 200 OU 201 como sucesso
+      if (response.status === 200 || response.status === 201) {
         setToast({
           show: true,
-          message: 'Jogo criado com sucesso!',
+          message: response.data.message || 'Jogo criado com sucesso!',
           type: 'success'
         });
         setTimeout(() => {
@@ -99,7 +117,7 @@ function CriarJogo() {
     } catch (error) {
       setToast({
         show: true,
-        message: 'Erro de conexão com o servidor.',
+        message: error.response?.data?.message || 'Erro de conexão com o servidor.',
         type: 'error'
       });
     } finally {
@@ -107,9 +125,16 @@ function CriarJogo() {
     }
   };
 
+  // Gerar anos para o selector (1952 até o ano atual + 5)
+  const anoAtual = new Date().getFullYear();
+  const anosDisponiveis = [];
+  for (let ano = anoAtual + 5; ano >= 1952; ano--) {
+    anosDisponiveis.push(ano);
+  }
+
   return (
-    <div className="wrapper2">
-      <div className="cadastro-box">
+    <div className="wrapper">
+      <div className="jogo-box">
         <ToastAlert 
           show={toast.show}
           message={toast.message}
@@ -117,11 +142,11 @@ function CriarJogo() {
           onClose={() => setToast(prev => ({ ...prev, show: false }))}
         />
         
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <h2>Criar Novo Jogo</h2>
+        <form onSubmit={handleSubmit}>
+          <h2 className="text-center w-full">Criar Novo Jogo</h2>
 
-          <div className="element-box">
-            <div className="input-box">
+          <div className="element-box-row flex justify-center" style={{ maxWidth: '400px', marginBottom: '0px' }}>
+            <div className="input-box" >
               <input
                 type="text"
                 required
@@ -131,9 +156,7 @@ function CriarJogo() {
               />
               <label>Nome</label>
             </div>
-          </div>
 
-          <div className="element-box">
             <div className="input-box">
               <input
                 type="number"
@@ -146,9 +169,7 @@ function CriarJogo() {
               />
               <label>Ano</label>
             </div>
-          </div>
 
-          <div className="element-box">
             <div className="input-box">
               <input
                 type="text"
@@ -161,48 +182,72 @@ function CriarJogo() {
             </div>
           </div>
 
-          <div className="element-box">
-            <div className="input-box">
-              <input
-                type="file"
-                name="imagem"
-                onChange={handleImageChange}
-                className="form-input"
-                accept="image/*"
-                required
-              />
-            </div>
+          <div className="element-box-row text-white flex items-center">
+              <div className="flex justify-center gap-4" style={{ maxWidth: '200px' }}>
+                <h3 className="mb-3">Upload</h3>   
+                <button 
+                  type="button"
+                  className={`method-btn ${tipoImagem === 'upload' ? 'active' : ''}`}
+                  onClick={() => alternarMetodo('upload')}
+                >
+                  <IonIcon icon={cloudUploadOutline} className="text-xl" />
+                </button>
+                
+                <button 
+                  type="button"
+                  className={`method-btn ${tipoImagem === 'url' ? 'active' : ''}`}
+                  onClick={() => alternarMetodo('url')}
+                >
+                  <IonIcon icon={globeOutline} className="text-xl" />
+                </button>
+              </div>
+
+              {tipoImagem === 'upload' ? (
+                <div className="input-box" style={{ maxWidth: '250px' }}>
+                  <input
+                    type="file"
+                    id="imagem-input"
+                    name="imagem"
+                    onChange={handleImageChange}
+                    className="hidden-file-input"
+                    accept="image/*"
+                  />
+                </div>
+              ) : (
+                <div className="input-box" style={{ maxWidth: '250px' }}>
+                  <input
+                    type="text"
+                    value={imagemUrl}
+                    onChange={handleImageUrlChange}
+                    placeholder=" "
+                  />
+                  <label>URL da Imagem</label>
+                </div>
+              )}
+
             {previewUrl && (
-              <div className="image-preview">
-                <img src={previewUrl} alt="Preview" />
+              <div className="input-box mt-4 flex justify-center">
+                <img 
+                  src={previewUrl} 
+                  alt="Preview" 
+                  className="max-w-xs max-h-48 rounded border border-gray-600"
+                  onError={(e) => {
+                    e.target.src = "https://via.placeholder.com/150?text=Imagem+não+encontrada";
+                    setToast({
+                      show: true,
+                      message: 'A URL da imagem parece ser inválida.',
+                      type: 'warning'
+                    });
+                  }}
+                />
               </div>
             )}
           </div>
 
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Categorias
-            </label>
-            <select
-              multiple
-              value={categoriaSelecionadas}
-              onChange={(e) => setCategoriaSelecionadas(
-                Array.from(e.target.selectedOptions, option => option.value)
-              )}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            >
-              {categorias.map(categoria => (
-                <option key={categoria.id} value={categoria.id}>
-                  {categoria.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="element-box">
+          <div className="element-box text-center">
             <button
               type="submit"
-              className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              className="w-40 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
               disabled={loading}
             >
               {loading ? 'Criando...' : 'Criar Jogo'}

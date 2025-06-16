@@ -1,14 +1,16 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { IonIcon } from '@ionic/react';
+import { gameControllerOutline} from 'ionicons/icons';
 
 function Footer() {
   return (
-    <footer className="bg-white dark:bg-gray-900">
+    <footer className="bg-gray-900 border-b border-gray-800">
       <div className="mx-auto max-w-screen-xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="sm:flex sm:items-center sm:justify-between">
           <div className="flex justify-center text-teal-600 dark:text-teal-300 sm:justify-start">
-            <Link to="/" className="text-xl font-bold">
-              GameVerse
+            <Link className="block text-blue-600 flex items-center gap-2" to="/">
+              <span className="text-white text-xl"><p><strong>Gameverse</strong> &copy; 2025 - Todos os direitos reservados.</p></span>
             </Link>
           </div>
 

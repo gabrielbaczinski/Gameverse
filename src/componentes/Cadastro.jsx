@@ -29,6 +29,7 @@ function Cadastro() {
     }
   });
   const [passwordMatch, setPasswordMatch] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const checkPasswordStrength = (password) => {
     const checks = {
@@ -63,7 +64,7 @@ function Cadastro() {
   const validatePasswords = (password, confirmPassword) => {
     const doesMatch = password === confirmPassword;
     setPasswordMatch(doesMatch);
-    if (!doesMatch) {
+    if (!doesMatch && confirmPassword) {
       showToast('As senhas não coincidem');
     }
     return doesMatch;
@@ -85,15 +86,22 @@ function Cadastro() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Previne o comportamento padrão do formulário
+    
+    // Evita múltiplos envios
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
 
     if (!passwordStrength.isStrong) {
       showToast('Por favor, escolha uma senha forte.');
+      setIsSubmitting(false);
       return;
     }
 
     if (senha !== confirmarSenha) {
       showToast('As senhas não coincidem!');
+      setIsSubmitting(false);
       return;
     }
 
@@ -118,13 +126,15 @@ function Cadastro() {
       }
     } catch (error) {
       showToast('Erro de conexão com o servidor');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="wrapper2">
+    <div className="wrapper">
       <div className="cadastro-box">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="text-center">
           <h2>Cadastro</h2>
 
           <ToastAlert 
@@ -134,34 +144,37 @@ function Cadastro() {
             onClose={hideToast}
           />
 
-          <div className="element-box">
-            <div className="input-box">
-              <input
-                type="text"
-                required
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                placeholder=" "
-              />
-              <label>Nome</label>
+          {/* Nome e Email na mesma linha */}
+          <div className="flex gap-4">
+            <div className="element-box flex-1">
+              <div className="input-box" style={{ maxWidth: '200px' }}>
+                <input
+                  type="text"
+                  required
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder=" "
+                />
+                <label>Nome</label>
+              </div>
             </div>
-          </div>
 
-          <div className="element-box">
-            <div className="input-box">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder=" "
-              />
-              <label>Email</label>
+            <div className="element-box flex-1">
+              <div className="input-box" style={{ maxWidth: '200px' }}>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder=" "
+                />
+                <label>Email</label>
+              </div>
             </div>
           </div>
 
           <div className="element-box-row">
-            <div className="input-box">
+            <div className="input-box" style={{ maxWidth: '200px' }}>
               <input
                 type={showPassword ? "text" : "password"}
                 required
@@ -202,7 +215,7 @@ function Cadastro() {
                 </div>
               )}
             </div>
-            <div className="input-box">
+            <div className="input-box" style={{ maxWidth: '200px' }}>
               <input
                 type={showConfirmPassword ? "text" : "password"}
                 required
@@ -228,9 +241,10 @@ function Cadastro() {
           <div className="element-box">
             <button
               type="submit"
-              className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              disabled={isSubmitting}
+              className={`w-60 mb-6 py-2 ${isSubmitting ? 'bg-blue-400' : 'bg-blue-600'} text-white rounded hover:bg-blue-700 transition`}
             >
-              Cadastrar
+              {isSubmitting ? 'Cadastrando...' : 'Cadastrar'}
             </button>
           </div>
 

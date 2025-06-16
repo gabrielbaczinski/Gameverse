@@ -44,8 +44,8 @@ function RedefinirSenha() {
   };
 
   return (
-    <div className="wrapper2">
-      <div className="login-box text-center">
+    <div className="wrapper">
+      <div className="senha-box text-center">
         <form onSubmit={handleSubmit}>
           <h2>Redefinir Senha</h2>
 
@@ -70,18 +70,19 @@ function RedefinirSenha() {
             </div>
           </div>
 
-          <div className="element-box flex justify-between">
-            <Link to="/login" className="text-white underline">Voltar para o Login</Link>
-            <Link to="/cadastro" className="text-white underline">Cadastre-se</Link>
-          </div>
+         
 
-          <div className="element-box">
+          <div className="element-box mb-6">
             <button
               type="submit"
-              className="w-40 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              className="w-60 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
             >
-              Enviar Link de Redefinição
+            Link de Redefinição
             </button>
+          </div>
+
+           <div className="element-box flex justify-center">
+            <Link to="/login" className="text-white underline">Voltar para o Login</Link>
           </div>
         </form>
       </div>
