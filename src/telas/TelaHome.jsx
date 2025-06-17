@@ -3,7 +3,7 @@ import "./../componentes/style.css";
 
 function TelaHome() {
   return (
-    <div className="wrapper2 min-h-screen flex items-center justify-center p-6">
+    <div className="wrapper min-h-screen flex items-center justify-center p-6">
       <div className="login-box text-center bg-black bg-opacity-50 p-10 rounded-lg shadow-lg max-w-xl w-full">
         <form>
           <h2 className="text-4xl font-bold text-white mb-4">🎮 GameVerse</h2>
