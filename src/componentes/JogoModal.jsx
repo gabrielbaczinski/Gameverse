@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IonIcon } from '@ionic/react';
-import { closeOutline, closeCircleOutline } from 'ionicons/icons';
+import { closeOutline, closeCircleOutline, cloudUploadOutline, globeOutline } from 'ionicons/icons';
 import axios from 'axios';
 import ToastAlert from './Toast';
 
@@ -11,16 +11,23 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
     genero: jogo.genero,
     imagem: null
   });
+  const [tipoImagem, setTipoImagem] = useState('upload'); // 'upload' ou 'url'
+  const [imagemUrl, setImagemUrl] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(jogo.imagem);
   const [categorias, setCategorias] = useState([]);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
-  const [novaTag, setNovaTag] = useState('');
   const [tagsJogo, setTagsJogo] = useState([]);
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState([]);
   const [toast, setToast] = useState({
     show: false,
     message: '',
-    type: 'info' // padrão
+    type: 'info'
   });
+
+  // Inicializar as tags do jogo
+  useEffect(() => {
+    setTagsJogo(jogo.categorias || []);
+  }, [jogo]);
 
   useEffect(() => {
     const carregarCategorias = async () => {
@@ -51,6 +58,42 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
     carregarCategoriasDisponiveis();
   }, []);
 
+  // Função para alternar entre os métodos de imagem
+  const alternarMetodo = (metodo) => {
+    setTipoImagem(metodo);
+    if (metodo === 'upload') {
+      setImagemUrl('');
+    } else {
+      setFormData(prev => ({ ...prev, imagem: null }));
+      // Mantém a preview da imagem existente se nenhuma nova for fornecida
+      if (!jogo.imagem.startsWith('http')) {
+        setPreviewUrl(null);
+      }
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData(prev => ({ ...prev, imagem: file }));
+      // Cria URL de preview
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      // Resetar URL quando fizer upload
+      setImagemUrl('');
+      setTipoImagem('upload');
+    }
+  };
+
+  const handleImageUrlChange = (e) => {
+    const url = e.target.value;
+    setImagemUrl(url);
+    setPreviewUrl(url);
+    setTipoImagem('url');
+    // Resetar upload quando inserir URL
+    setFormData(prev => ({ ...prev, imagem: null }));
+  };
+
   // Função para exibir toast
   const showToast = (message, type = 'info') => {
     console.log(`[JogoModal] Exibindo toast: ${message} (${type})`);
@@ -62,26 +105,12 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
     }, 3000);
   };
 
-  const hideToast = () => {
-    setToast(prev => ({ ...prev, show: false }));
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-  };
-
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData(prev => ({
-        ...prev,
-        imagem: file
-      }));
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -92,8 +121,12 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
     formDataToSend.append("nome", formData.nome);
     formDataToSend.append("ano", formData.ano);
     formDataToSend.append("genero", formData.genero);
-    if (formData.imagem) {
+    
+    // Enviar imagem ou URL dependendo da escolha
+    if (tipoImagem === 'upload' && formData.imagem) {
       formDataToSend.append("imagem", formData.imagem);
+    } else if (tipoImagem === 'url' && imagemUrl) {
+      formDataToSend.append("imagemUrl", imagemUrl);
     }
 
     try {
@@ -120,10 +153,6 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
   };
 
   const adicionarTag = async () => {
-    // Log para debug
-    console.log('Categoria selecionada:', categoriaSelecionada);
-    console.log('Categorias disponíveis:', categoriasDisponiveis);
-    
     if (!categoriaSelecionada) {
       showToast('Selecione uma categoria válida', 'warning');
       return;
@@ -136,8 +165,7 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
     }
 
     try {
-      // Buscar ID da categoria diretamente do servidor pelo nome
-      // Isso é mais confiável do que tentar encontrar no array local
+      // Buscar ID da categoria pelo nome
       const catResponse = await axios.get(
         `http://localhost:5000/api/categorias/busca?nome=${encodeURIComponent(categoriaSelecionada)}`,
         {
@@ -147,7 +175,6 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
       
       if (!catResponse.data || !catResponse.data.id) {
         showToast('Categoria não encontrada no servidor', 'error');
-        console.error('Resposta da API de categorias:', catResponse.data);
         return;
       }
       
@@ -189,7 +216,6 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
     }
   };
 
-  // Modifique a função removerTag para passar o jogo atualizado:
   const removerTag = async (tagName) => {
     try {
       const response = await axios.delete(
@@ -199,7 +225,6 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
         }
       );
       
-      // Verifique o status explicitamente
       if (response.status === 200) {
         // Atualiza o estado local
         const novasCategorias = tagsJogo.filter(tag => tag !== tagName);
@@ -211,22 +236,17 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
           categorias: novasCategorias
         };
         
-        // Notifica o componente pai COM o jogo atualizado
         if (onUpdate) {
           onUpdate(jogoAtualizado);
         }
         
-        // Exibe toast de sucesso
         showToast('Categoria removida com sucesso!', 'success');
       } else {
-        // Caso improvável, mas para cobrir todos os casos
         console.warn('Status inesperado na resposta:', response.status);
         showToast('Resposta inesperada do servidor', 'warning');
       }
     } catch (error) {
       console.error('Erro ao remover categoria:', error);
-      
-      // Exibe mensagem de erro específica
       const errorMsg = error.response?.data?.error || 'Erro ao remover categoria';
       showToast(errorMsg, 'error');
     }
@@ -239,7 +259,6 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
   };
 
   const handleBackdropClick = (e) => {
-    // Verifica se o clique foi fora da modal
     if (e.target.classList.contains('wrapper-modal')) {
       onClose();
     }
@@ -310,18 +329,79 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
               </div>
             </div>
 
+            {/* Opções de método de imagem */}
             <div className="form-group">
-              <div className="input-box modal-input">
-                <input
-                  type="file"
-                  name="imagem"
-                  onChange={handleImageChange}
-                  accept="image/*"
-                  className="pt-2"
-                />
-                <label>Nova Imagem</label>
+              <label className="form-label">Alterar Imagem</label>
+              <div className="method-selector">
+                <button 
+                  type="button"
+                  className={`method-btn ${tipoImagem === 'upload' ? 'active' : ''}`}
+                  onClick={() => alternarMetodo('upload')}
+                >
+                  <IonIcon icon={cloudUploadOutline} className="text-xl" />
+                  Upload
+                </button>
+                
+                <button 
+                  type="button"
+                  className={`method-btn ${tipoImagem === 'url' ? 'active' : ''}`}
+                  onClick={() => alternarMetodo('url')}
+                >
+                  <IonIcon icon={globeOutline} className="text-xl" />
+                  URL
+                </button>
               </div>
+
+              {/* Input condicional baseado no tipo */}
+              {tipoImagem === 'upload' ? (
+                <div className="file-upload-container">
+                  <input
+                    type="file"
+                    id="imagem-input-modal"
+                    name="imagem"
+                    onChange={handleImageChange}
+                    className="hidden-file-input"
+                    accept="image/*"
+                  />
+                  <label htmlFor="imagem-input-modal" className="file-upload-btn">
+                    <IonIcon icon={cloudUploadOutline} />
+                    Selecionar Imagem
+                  </label>
+                  {formData.imagem && (
+                    <span className="selected-file-name">
+                      {formData.imagem.name}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="input-box modal-input">
+                  <input
+                    type="text"
+                    value={imagemUrl}
+                    onChange={handleImageUrlChange}
+                    placeholder=" "
+                  />
+                  <label>URL da Imagem</label>
+                </div>
+              )}
             </div>
+
+            {/* Visualização da imagem */}
+            {previewUrl && (
+              <div className="form-group text-center">
+                <div className="image-preview">
+                  <img 
+                    src={previewUrl} 
+                    alt="Preview" 
+                    className="max-w-xs max-h-48 rounded"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/150?text=Imagem+não+encontrada";
+                      showToast('A URL da imagem parece ser inválida.', 'warning');
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Adicionar Categoria</label>

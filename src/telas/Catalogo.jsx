@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import JogoModal from "../componentes/JogoModal";
@@ -17,9 +17,20 @@ function Catalogo() {
   const navigate = useNavigate();
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
 
-  // Função helper para mostrar o toast
-  const showToast = (message, type = 'info') => {
-    // Log para debug
+  // Referência para controlar se o componente está montado
+  const isMountedRef = useRef(true);
+  
+  // Efeito para limpar a referência quando o componente for desmontado
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Função helper para mostrar o toast mais segura
+  const showToast = useCallback((message, type = 'info') => {
+    if (!isMountedRef.current) return; // Não mostra toast se componente foi desmontado
+    
     console.log(`Exibindo toast: "${message}" (tipo: ${type})`);
     
     // Limpe qualquer timer existente para evitar conflitos
@@ -32,9 +43,11 @@ function Catalogo() {
     
     // Configure o timer para fechar e armazene sua referência
     window.toastTimer = setTimeout(() => {
-      setToast(prev => ({ ...prev, show: false }));
+      if (isMountedRef.current) { // Verifica novamente antes de atualizar estado
+        setToast(prev => ({ ...prev, show: false }));
+      }
     }, 3000);
-  };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -85,20 +98,36 @@ function Catalogo() {
     carregarCategorias();
   }, []);
 
-  // Transforme carregarJogos em useCallback para evitar recriações desnecessárias
+  // Melhorar a função de carregamento com verificação de componente montado
   const carregarJogos = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/jogos');
-      setJogos(response.data);
-      console.log('Jogos carregados:', response.data.length);
+      const response = await axios.get('http://localhost:5000/api/jogos', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      
+      if (isMountedRef.current) {
+        // Verifica se a resposta é válida antes de atualizar o estado
+        if (response && response.data) {
+          setJogos(response.data);
+          console.log('Jogos carregados:', response.data.length);
+        }
+      }
     } catch (error) {
       console.error('Erro ao carregar jogos:', error);
-      showToast('Erro ao carregar jogos', 'error');
+      
+      // Somente mostra o erro se o componente ainda estiver montado
+      if (isMountedRef.current) {
+        showToast('Erro ao carregar jogos', 'error');
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, []);  // Sem dependências para evitar loops
+  }, [showToast]); // Adiciona showToast como dependência
 
   // Adicione um efeito para debug
   useEffect(() => {
@@ -261,8 +290,8 @@ function Catalogo() {
                 <div className="card-content">
                   <div className="p-4">
                     <h2 className="text-xl font-bold mb-2">{jogo.nome}</h2>
-                    <p className="text-sm text-gray-400">Ano: {jogo.ano}</p>
-                    <p className="text-sm text-gray-400 mb-2">Descrição: {jogo.genero}</p>
+                    <p className="text-sm text-white">Ano: {jogo.ano}</p>
+                    <p className="text-sm text-white mb-2">Descrição: {jogo.genero}</p>
                     
                     {/* Renderização segura das categorias */}
                     {jogo.categorias && (
@@ -333,8 +362,15 @@ function Catalogo() {
         <JogoModal
           jogo={jogoSelecionado}
           onClose={() => {
+            // Primeiro, fecha o modal
             setJogoSelecionado(null);
-            carregarJogos(); // Recarrega jogos ao fechar o modal
+            
+            // Depois recarrega os jogos com um pequeno atraso para evitar conflitos
+            setTimeout(() => {
+              if (isMountedRef.current) { // Verifica se o componente ainda está montado
+                carregarJogos();
+              }
+            }, 300);
           }}
           onUpdate={handleAtualizar}
           onDelete={handleExcluir}

@@ -157,17 +157,37 @@ function CriarJogo() {
               <label>Nome</label>
             </div>
 
-            <div className="input-box">
+            <div className="input-box modal-input year-select-container">
               <input
                 type="number"
-                required
-                min="1952"
-                max={new Date().getFullYear()+5}
+                name="ano"
                 value={ano}
                 onChange={(e) => setAno(e.target.value)}
                 placeholder=" "
+                min="1950"
+                max="2030"
+                required
               />
               <label>Ano</label>
+              {/* Opcional: Botões customizados para incrementar/decrementar */}
+              <div className="year-control-buttons">
+                <button 
+                  type="button" 
+                  className="year-button up" 
+                  onClick={() => setAno(prev => Number(prev) + 1)}
+                  tabIndex="-1" // Remove do fluxo de tabulação
+                >
+                  ▲
+                </button>
+                <button 
+                  type="button" 
+                  className="year-button down" 
+                  onClick={() => setAno(prev => Math.max(1950, Number(prev) - 1))}
+                  tabIndex="-1" // Remove do fluxo de tabulação
+                >
+                  ▼
+                </button>
+              </div>
             </div>
 
             <div className="input-box">
@@ -178,11 +198,11 @@ function CriarJogo() {
                 onChange={(e) => setGenero(e.target.value)}
                 placeholder=" "
               />
-              <label>Gênero</label>
+              <label>Descrição</label>
             </div>
           </div>
 
-          <div className="element-box-row text-white flex items-center">
+          <div className="element-box-row text-white flex items-center" style={{ maxHeight: '50px' }}>
               <div className="flex justify-center gap-4" style={{ maxWidth: '200px' }}>
                 <h3 className="mb-3">Upload</h3>   
                 <button 
@@ -203,7 +223,7 @@ function CriarJogo() {
               </div>
 
               {tipoImagem === 'upload' ? (
-                <div className="input-box" style={{ maxWidth: '250px' }}>
+                <div className="file-upload-container">
                   <input
                     type="file"
                     id="imagem-input"
@@ -212,9 +232,18 @@ function CriarJogo() {
                     className="hidden-file-input"
                     accept="image/*"
                   />
+                  <label htmlFor="imagem-input" className="file-upload-btn">
+                    <IonIcon icon={cloudUploadOutline} />
+                    Selecionar Imagem
+                  </label>
+                  {imagem && (
+                    <span className="selected-file-name">
+                      {imagem.name}
+                    </span>
+                  )}
                 </div>
               ) : (
-                <div className="input-box" style={{ maxWidth: '250px' }}>
+                <div className="input-box" style={{ maxWidth: '250px', maxHeight: '45px' }}>
                   <input
                     type="text"
                     value={imagemUrl}
