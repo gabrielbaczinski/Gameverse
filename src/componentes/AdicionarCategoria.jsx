@@ -12,9 +12,7 @@ function AdicionarCategoria({ jogo, onClose, onUpdate }) {
     const carregarCategorias = async () => {
       try {
         const response = await axios.get('http://localhost:5000/api/categorias', {
-          headers: { 
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}` 
-          }
+          headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
         });
         setCategorias(response.data);
       } catch (error) {
@@ -32,7 +30,7 @@ function AdicionarCategoria({ jogo, onClose, onUpdate }) {
     try {
       const response = await axios.post(
         `http://localhost:5000/api/jogos/${jogo.id}/categorias`,
-        { categorias: categoriaSelecionadas },
+        { categorias: categoriaSelecionadas.map(id => parseInt(id)) },
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -53,15 +51,16 @@ function AdicionarCategoria({ jogo, onClose, onUpdate }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+    <div className="wrapper-modal">
+      <div className="modal-container">
         <div className="modal-header">
           <h2 className="modal-title">Adicionar Categorias - {jogo.nome}</h2>
           <button 
             onClick={onClose} 
-            className="absolute w-7 h-7 top-2 right-2 p-1 hover:bg-gray-700 rounded-full transition-colors"
+            className="modal-close-btn"
+            aria-label="Fechar"
           >
-            <IonIcon icon={closeOutline} className="w-5 h-5" />
+            <IonIcon icon={closeOutline} />
           </button>
         </div>
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import JogoModal from "../componentes/JogoModal";
 import { IonIcon } from '@ionic/react';
-import { pricetag, searchOutline } from 'ionicons/icons';
+import { pricetag, searchOutline, closeOutline } from 'ionicons/icons';
+import ToastAlert from "../componentes/Toast";
 
 function Catalogo() {
   const [jogos, setJogos] = useState([]);
@@ -14,6 +15,26 @@ function Catalogo() {
   const [error, setError] = useState(null);
   const [jogoSelecionado, setJogoSelecionado] = useState(null);
   const navigate = useNavigate();
+  const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
+
+  // Função helper para mostrar o toast
+  const showToast = (message, type = 'info') => {
+    // Log para debug
+    console.log(`Exibindo toast: "${message}" (tipo: ${type})`);
+    
+    // Limpe qualquer timer existente para evitar conflitos
+    if (window.toastTimer) {
+      clearTimeout(window.toastTimer);
+    }
+    
+    // Defina o novo toast
+    setToast({ show: true, message, type });
+    
+    // Configure o timer para fechar e armazene sua referência
+    window.toastTimer = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 3000);
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -64,12 +85,87 @@ function Catalogo() {
     carregarCategorias();
   }, []);
 
-  const handleAtualizar = (jogoAtualizado) => {
-    setJogos(jogos.map(j => j.id === jogoAtualizado.id ? jogoAtualizado : j));
-  };
+  // Transforme carregarJogos em useCallback para evitar recriações desnecessárias
+  const carregarJogos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get('http://localhost:5000/api/jogos');
+      setJogos(response.data);
+      console.log('Jogos carregados:', response.data.length);
+    } catch (error) {
+      console.error('Erro ao carregar jogos:', error);
+      showToast('Erro ao carregar jogos', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);  // Sem dependências para evitar loops
 
-  const handleExcluir = (idJogo) => {
-    setJogos(jogos.filter(j => j.id !== idJogo));
+  // Adicione um efeito para debug
+  useEffect(() => {
+    console.log('Estado de jogos atualizado:', jogos.length, 'jogos');
+  }, [jogos]);
+
+  // Modifique a função handleAtualizar para aceitar um parâmetro opcional
+  const handleAtualizar = useCallback((jogoAtualizado = null) => {
+    // Se um jogo específico for atualizado, atualize apenas ele no estado
+    if (jogoAtualizado) {
+      setJogos(prevJogos => 
+        prevJogos.map(jogo => 
+          jogo.id === jogoAtualizado.id ? jogoAtualizado : jogo
+        )
+      );
+      
+      // Se o jogo atualizado for o selecionado, atualize-o também
+      if (jogoSelecionado && jogoSelecionado.id === jogoAtualizado.id) {
+        setJogoSelecionado(jogoAtualizado);
+      }
+      
+      showToast('Jogo atualizado', 'success');
+    } else {
+      // Se nenhum jogo específico for fornecido, recarregue todos
+      carregarJogos();
+    }
+  }, [carregarJogos, jogoSelecionado]);
+
+  // Função para excluir jogo
+  const handleExcluir = async (idJogo) => {
+    try {
+      // Feche o modal primeiro e forneça feedback visual imediato
+      setJogoSelecionado(null);
+      
+      // Informe que a exclusão está em andamento
+      showToast('Processando exclusão...', 'info');
+      
+      const response = await axios.delete(`http://localhost:5000/api/jogos/${idJogo}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      
+      // Verifique explicitamente o status da resposta
+      if (response.status >= 200 && response.status < 300) {
+        // Atualiza o estado local
+        setJogos(prevJogos => prevJogos.filter(jogo => jogo.id !== idJogo));
+        
+        // Mostra mensagem de sucesso APÓS a exclusão bem-sucedida
+        showToast('Jogo excluído com sucesso!', 'success');
+        
+        // Recarregue jogos após pequeno delay
+        setTimeout(() => {
+          carregarJogos();
+        }, 300);
+      } else {
+        // Status inesperado
+        console.warn('Status inesperado na exclusão:', response.status);
+        showToast(`Resposta inesperada: ${response.statusText}`, 'error');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir jogo:', error);
+      
+      // Mensagem de erro específica baseada na resposta
+      const errorMsg = error.response?.data?.message || 
+                       error.response?.data?.error || 
+                       'Erro ao excluir o jogo';
+      showToast(errorMsg, 'error');
+    }
   };
 
   // Filtrar jogos com verificação segura para categorias
@@ -98,36 +194,53 @@ function Catalogo() {
   if (error) return <div className="text-center mt-20 text-red-500">{error}</div>;
 
   return (
-    <div className="min-h-screen bg-black text-white p-10">
+    <div className="catalog-wrapper">
+      <ToastAlert 
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
       <h1 className="text-4xl font-bold text-center mb-8">Catálogo de Jogos</h1>
 
       <div className="search-filter-container">
         <div className="search-box">
-          <div className="input-wrapper">
+          <div className="search-input-wrapper">
             <IonIcon icon={searchOutline} className="search-icon" />
             <input
               type="text"
               placeholder="Buscar jogos..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="w-full px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="search-input"
             />
+            {busca && (
+              <button 
+                onClick={() => setBusca('')} 
+                className="clear-search-btn"
+              >
+                <IonIcon icon={closeOutline} />
+              </button>
+            )}
           </div>
         </div>
         
-        <div className="category-filter">
-          <select
-            value={categoriaSelecionada}
-            onChange={(e) => setCategoriaSelecionada(e.target.value)}
-            className="w-full px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Todas as categorias</option>
-            {categorias.map(cat => (
-              <option key={cat.id} value={cat.nome}>
-                {cat.nome}
-              </option>
-            ))}
-          </select>
+        <div className="filter-box">
+          <div className="select-wrapper">
+            <select
+              value={categoriaSelecionada}
+              onChange={(e) => setCategoriaSelecionada(e.target.value)}
+              className="category-select"
+            >
+              <option value="">Todas as categorias</option>
+              {categorias.map(cat => (
+                <option key={cat.id} value={cat.nome}>
+                  {cat.nome}
+                </option>
+              ))}
+            </select>
+            <IonIcon icon={pricetag} className="select-icon" />
+          </div>
         </div>
       </div>
 
@@ -149,7 +262,7 @@ function Catalogo() {
                   <div className="p-4">
                     <h2 className="text-xl font-bold mb-2">{jogo.nome}</h2>
                     <p className="text-sm text-gray-400">Ano: {jogo.ano}</p>
-                    <p className="text-sm text-gray-400 mb-2">Gênero: {jogo.genero}</p>
+                    <p className="text-sm text-gray-400 mb-2">Descrição: {jogo.genero}</p>
                     
                     {/* Renderização segura das categorias */}
                     {jogo.categorias && (
@@ -219,7 +332,10 @@ function Catalogo() {
       {jogoSelecionado && (
         <JogoModal
           jogo={jogoSelecionado}
-          onClose={() => setJogoSelecionado(null)}
+          onClose={() => {
+            setJogoSelecionado(null);
+            carregarJogos(); // Recarrega jogos ao fechar o modal
+          }}
           onUpdate={handleAtualizar}
           onDelete={handleExcluir}
         />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IonIcon } from '@ionic/react';
-import { pencil, trash, closeOutline } from 'ionicons/icons';
+import { pencil, trash, closeOutline, pricetag, addOutline } from 'ionicons/icons';
 import ToastAlert from '../componentes/Toast';
 import axios from 'axios';
 
@@ -27,6 +27,12 @@ function GerenciarCategorias() {
     } catch (error) {
       showToast('Erro ao carregar categorias', 'error');
     }
+  };
+
+  // Função para fechar modal e recarregar dados
+  const fecharModal = () => {
+    setCategoriaEditando(null);
+    carregarCategorias(); // Recarrega todas as categorias ao fechar o modal
   };
 
   const showToast = (message, type = 'error') => {
@@ -84,8 +90,7 @@ function GerenciarCategorias() {
           message: 'Categoria atualizada com sucesso!',
           type: 'success'
         });
-        carregarCategorias();
-        setCategoriaEditando(null);
+        fecharModal(); // Usa a função fecharModal que recarrega os dados
       }
     } catch (error) {
       setToast({
@@ -122,7 +127,7 @@ function GerenciarCategorias() {
         
         <h2>Gerenciar Categorias</h2>
 
-        {/* Form for adding new categories */}
+        {/* Form for adding new categories */} 
         <form onSubmit={handleSubmit}>
           <div className="element-box">
             <div className="input-box">
@@ -143,25 +148,26 @@ function GerenciarCategorias() {
         </form>
 
         {/* List of categories */}
-        <div className="grid gap-4 mt-8">
+        <div className="grid-container mt-8">
           {categorias.map((categoria) => (
-            <div key={categoria.id} className="flex items-center justify-between p-4 bg-gray-800 rounded-lg">
-              <span className="text-white">{categoria.nome}</span>
-              <div className="flex gap-2">
+            <div key={categoria.id} className="category-grid-item">
+              <div className="category-content">
+                <span className="game-tag compact-tag">{categoria.nome}</span>
+              </div>
+              <div className="category-actions">
                 <button
                   type="button"
-                  onClick={() => {
-                    console.log('Setting categoria:', categoria); // Debug log
-                    setCategoriaEditando(categoria);
-                  }}
-                  className="p-2 text-blue-500 hover:text-blue-400"
+                  onClick={() => setCategoriaEditando(categoria)}
+                  className="action-btn edit"
+                  title="Editar categoria"
                 >
                   <IonIcon icon={pencil} />
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(categoria.id)}
-                  className="p-2 text-red-500 hover:text-red-400"
+                  className="action-btn delete"
+                  title="Excluir categoria"
                 >
                   <IonIcon icon={trash} />
                 </button>
@@ -170,25 +176,28 @@ function GerenciarCategorias() {
           ))}
         </div>
 
-        {/* Edit Modal */}
+        {/* Modal editado para seguir o padrão de GerenciarUsuarios */}
         {categoriaEditando && (
-          <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-            <div className="wrapper-modal">
-              <div className="modal-container">
+          <div className="wrapper-modal">
+            <div className="modal-container glass-modal">
+              <div className="modal-header">
+                <h3>Editar Categoria</h3>
                 <button 
-                  type="button"
-                  onClick={() => setCategoriaEditando(null)}
-                  className="absolute w-7 h-7 top-2 right-2 p-1 hover:bg-gray-700 rounded-full"
+                  onClick={fecharModal}
+                  className="modal-close-btn"
+                  aria-label="Fechar"
                 >
                   <IonIcon icon={closeOutline} />
                 </button>
+              </div>
 
-                <h2>Editar Categoria</h2>
-
-                <form onSubmit={handleEdit}>
-                  <div className="element-box">
-                    <div className="input-box">
+              <form onSubmit={handleEdit}>
+                <div className="modal-body">
+                  <div className="form-group">
+                    <div className="form-icon">
+                      <IonIcon icon={pricetag} />
+                    </div>
+                    <div className="input-box modal-input">
                       <input
                         type="text"
                         value={categoriaEditando.nome}
@@ -199,24 +208,24 @@ function GerenciarCategorias() {
                       <label>Nome da Categoria</label>
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex gap-2">
-                    <button 
-                      type="submit" 
-                      className="flex-1 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                    >
-                      Salvar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCategoriaEditando(null)}
-                      className="flex-1 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <div className="modal-footer">
+                  <button 
+                    type="button" 
+                    className="glass-action-btn cancel"
+                    onClick={fecharModal}
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="glass-action-btn save"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

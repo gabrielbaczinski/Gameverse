@@ -71,9 +71,18 @@ function GerenciarUsuarios() {
   };
 
   const iniciarEdicao = async (usuario) => {
+    // Primeiro definimos o estado para abrir o modal
+    setUsuarioEditando({
+      id: usuario.id,
+      nome: usuario.nome || '',
+      email: usuario.email || '',
+      senha: '' // Senha vazia para edição
+    });
+    
+    setLoading(true);
+    
     try {
       const token = localStorage.getItem('authToken');
-      setLoading(true);
       
       const response = await fetch(`http://localhost:5000/api/usuarios/${usuario.id}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -88,16 +97,18 @@ function GerenciarUsuarios() {
           senha: '' // Senha vazia para edição
         });
       } else {
+        // Mesmo com erro, mantemos o modal aberto com os dados básicos
         setToast({
           show: true,
-          message: 'Erro ao carregar dados do usuário',
+          message: 'Erro ao carregar dados completos do usuário',
           type: 'error'
         });
       }
     } catch (error) {
+      console.error("Erro ao buscar usuário:", error);
       setToast({
         show: true,
-        message: 'Erro ao carregar dados para edição',
+        message: 'Erro de conexão, usando dados básicos',
         type: 'error'
       });
     } finally {
@@ -157,20 +168,15 @@ function GerenciarUsuarios() {
         body: JSON.stringify(usuarioEditando)
       });
 
+      // 3. Substitua o bloco de sucesso no handleEdit:
       if (response.ok) {
         const usuarioAtualizado = await response.json();
-        setUsuarios(usuarios.map(user => 
-          user.id === usuarioAtualizado.id ? usuarioAtualizado : user
-        ));
-        setFilteredUsuarios(
-          filteredUsuarios.map(user => user.id === usuarioAtualizado.id ? usuarioAtualizado : user)
-        );
         setToast({
           show: true,
           message: 'Usuário atualizado com sucesso',
           type: 'success'
         });
-        setUsuarioEditando(null);
+        fecharModal(); // Fecha o modal e recarrega dados atualizados
       } else {
         setToast({
           show: true,
@@ -187,6 +193,12 @@ function GerenciarUsuarios() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 1. Modifique a função que fecha o modal para recarregar dados
+  const fecharModal = () => {
+    setUsuarioEditando(null);
+    carregarUsuarios(); // Recarrega todos os usuários ao fechar o modal
   };
 
   return (
@@ -218,39 +230,35 @@ function GerenciarUsuarios() {
             <div className="loader"></div>
           </div>
         ) : (
-          <div className="users-list-container">
+          <div className="glass-list-container">
             {filteredUsuarios.length > 0 ? (
               <>
-                <div className="users-list-header">
-                  <div className="user-col id-col">ID</div>
-                  <div className="user-col info-col">Informações</div>
-                  <div className="user-col actions-col">Ações</div>
+                <div className="glass-list-header">
+                  <div className="glass-col id-col">ID</div>
+                  <div className="glass-col info-col">Informações</div>
+                  <div className="glass-col actions-col">Ações</div>
                 </div>
                 
-                <div className="users-list-body">
+                <div className="glass-list-body">
                   {filteredUsuarios.map((usuario) => (
-                    <div key={usuario.id} className="user-row">
-                      <div className="user-col id-col">
+                    <div key={usuario.id} className="glass-list-row">
+                      <div className="glass-col id-col">
                         <span className="user-id">{usuario.id}</span>
                       </div>
                       
-                      <div className="user-col info-col">
+                      <div className="glass-col info-col">
                         <div className="user-info">
-                          <h4 className="user-name">
+                          <h4 className="user-name truncate">
                             <IonIcon icon={personOutline} /> 
                             {usuario.nome || 'Sem nome'}
                           </h4>
-                          <p className="user-email">
-                            <IonIcon icon={mailOutline} /> 
-                            {usuario.email || 'E-mail não definido'}
-                          </p>
                         </div>
                       </div>
                       
-                      <div className="user-col actions-col">
+                      <div className="glass-col actions-col">
                         <button
                           onClick={() => iniciarEdicao(usuario)}
-                          className="user-action-btn edit"
+                          className="glass-action-btn edit"
                           title="Editar usuário"
                         >
                           <IonIcon icon={pencil} />
@@ -258,7 +266,7 @@ function GerenciarUsuarios() {
                         </button>
                         <button
                           onClick={() => handleDelete(usuario.id)}
-                          className="user-action-btn delete"
+                          className="glass-action-btn delete"
                           title="Excluir usuário"
                         >
                           <IonIcon icon={trash} />
@@ -281,31 +289,24 @@ function GerenciarUsuarios() {
 
         {/* Modal de edição de usuário */}
         {usuarioEditando && (
-          <div className="modal-overlay">
-            <div className="user-edit-modal">
-              <button 
-                onClick={() => setUsuarioEditando(null)}
-                className="modal-close-btn"
-                aria-label="Fechar"
-              >
-                <IonIcon icon={closeOutline} />
-              </button>
-
+          <div className="wrapper-modal">
+            <div className="modal-container glass-modal">
               <div className="modal-header">
-                <div className="user-avatar">
-                  <IonIcon icon={personOutline} />
-                </div>
                 <h3>Editar Usuário</h3>
-                <p className="modal-subtitle">ID: {usuarioEditando.id}</p>
+                {/* 5. Atualize o botão de fechar no topo do modal: */}
+                <button 
+                  onClick={fecharModal}
+                  className="modal-close-btn"
+                  aria-label="Fechar"
+                >
+                  <IonIcon icon={closeOutline} />
+                </button>
               </div>
 
               <form onSubmit={handleEdit}>
                 <div className="modal-body">
-                  <div className="form-group">
-                    <div className="form-icon">
-                      <IonIcon icon={personOutline} />
-                    </div>
-                    <div className="input-box modal-input">
+                  <div className="element-box">
+                    <div className="input-box">
                       <input
                         type="text"
                         value={usuarioEditando.nome}
@@ -317,11 +318,8 @@ function GerenciarUsuarios() {
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <div className="form-icon">
-                      <IonIcon icon={mailOutline} />
-                    </div>
-                    <div className="input-box modal-input">
+                  <div className="element-box">
+                    <div className="input-box">
                       <input
                         type="email"
                         value={usuarioEditando.email}
@@ -333,11 +331,8 @@ function GerenciarUsuarios() {
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <div className="form-icon">
-                      <IonIcon icon={shieldOutline} />
-                    </div>
-                    <div className="input-box modal-input">
+                  <div className="element-box">
+                    <div className="input-box">
                       <input
                         type="password"
                         value={usuarioEditando.senha || ''}
@@ -350,20 +345,23 @@ function GerenciarUsuarios() {
                 </div>
 
                 <div className="modal-footer">
-                  <button 
-                    type="button" 
-                    className="modal-btn cancel"
-                    onClick={() => setUsuarioEditando(null)}
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="modal-btn save"
-                    disabled={loading}
-                  >
-                    {loading ? 'Salvando...' : 'Salvar Alterações'}
-                  </button>
+                  <div className="flex gap-2">
+                    {/* 4. Atualize os botões no modal para usar fecharModal: */}
+                    <button 
+                      type="button" 
+                      onClick={fecharModal}
+                      className="glass-action-btn cancel"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="glass-action-btn save"
+                      disabled={loading}
+                    >
+                      {loading ? 'Salvando...' : 'Salvar Alterações'}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>

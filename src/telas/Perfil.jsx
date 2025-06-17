@@ -48,7 +48,7 @@ function Perfil() {
   };
 
   return (
-    <div className="wrapper2">
+    <div className="wrapper">
       <div className="cadastro-box">
         <ToastAlert 
           show={toast.show}

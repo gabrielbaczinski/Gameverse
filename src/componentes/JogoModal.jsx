@@ -4,7 +4,7 @@ import { closeOutline, closeCircleOutline } from 'ionicons/icons';
 import axios from 'axios';
 import ToastAlert from './Toast';
 
-export default function JogoModal({ jogo, onClose, onUpdate, onDelete }) {
+const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
   const [formData, setFormData] = useState({
     nome: jogo.nome,
     ano: jogo.ano,
@@ -13,11 +13,13 @@ export default function JogoModal({ jogo, onClose, onUpdate, onDelete }) {
   });
   const [categorias, setCategorias] = useState([]);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
-  const [tagsJogo, setTagsJogo] = useState(jogo.categorias || []);
+  const [novaTag, setNovaTag] = useState('');
+  const [tagsJogo, setTagsJogo] = useState([]);
+  const [categoriasDisponiveis, setCategoriasDisponiveis] = useState([]);
   const [toast, setToast] = useState({
     show: false,
     message: '',
-    type: 'error'
+    type: 'info' // padrão
   });
 
   useEffect(() => {
@@ -35,8 +37,29 @@ export default function JogoModal({ jogo, onClose, onUpdate, onDelete }) {
     carregarCategorias();
   }, []);
 
-  const showToast = (message, type = 'error') => {
+  // Efeito para carregar categorias disponíveis
+  useEffect(() => {
+    const carregarCategoriasDisponiveis = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/categorias');
+        setCategoriasDisponiveis(response.data);
+      } catch (error) {
+        console.error('Erro ao carregar categorias:', error);
+      }
+    };
+    
+    carregarCategoriasDisponiveis();
+  }, []);
+
+  // Função para exibir toast
+  const showToast = (message, type = 'info') => {
+    console.log(`[JogoModal] Exibindo toast: ${message} (${type})`);
     setToast({ show: true, message, type });
+    
+    // Limpar toast automaticamente
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 3000);
   };
 
   const hideToast = () => {
@@ -97,45 +120,76 @@ export default function JogoModal({ jogo, onClose, onUpdate, onDelete }) {
   };
 
   const adicionarTag = async () => {
+    // Log para debug
+    console.log('Categoria selecionada:', categoriaSelecionada);
+    console.log('Categorias disponíveis:', categoriasDisponiveis);
+    
     if (!categoriaSelecionada) {
-      showToast('Selecione uma categoria', 'error');
+      showToast('Selecione uma categoria válida', 'warning');
       return;
     }
-    
+
+    // Verificar se a categoria já está adicionada
+    if (tagsJogo.includes(categoriaSelecionada)) {
+      showToast('Esta categoria já foi adicionada', 'warning');
+      return;
+    }
+
     try {
-      const categoriaObj = categorias.find(c => c.id === parseInt(categoriaSelecionada));
+      // Buscar ID da categoria diretamente do servidor pelo nome
+      // Isso é mais confiável do que tentar encontrar no array local
+      const catResponse = await axios.get(
+        `http://localhost:5000/api/categorias/busca?nome=${encodeURIComponent(categoriaSelecionada)}`,
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+        }
+      );
       
-      if (!categoriaObj) {
-        showToast('Categoria inválida', 'error');
+      if (!catResponse.data || !catResponse.data.id) {
+        showToast('Categoria não encontrada no servidor', 'error');
+        console.error('Resposta da API de categorias:', catResponse.data);
         return;
       }
-
-      if (tagsJogo.includes(categoriaObj.nome)) {
-        showToast('Categoria já existe neste jogo', 'error');
-        return;
-      }
-
+      
+      const categoriaId = catResponse.data.id;
+      
+      // Adicionar categoria ao jogo usando o ID
       const response = await axios.post(
         `http://localhost:5000/api/jogos/${jogo.id}/categorias`,
-        { categorias: [parseInt(categoriaSelecionada)] },
+        { categorias: [categoriaId] },
         {
           headers: { 
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('authToken')}` 
           }
         }
       );
 
       if (response.status === 200) {
-        setTagsJogo([...tagsJogo, categoriaObj.nome]);
-        setCategoriaSelecionada('');
-        showToast('Categoria adicionada com sucesso', 'success');
+        // Atualiza o estado local
+        const novasCategorias = [...tagsJogo, categoriaSelecionada];
+        setTagsJogo(novasCategorias);
+        setCategoriaSelecionada(''); // Limpa a seleção
+        
+        // Notifica o componente pai
+        const jogoAtualizado = {
+          ...jogo,
+          categorias: novasCategorias
+        };
+        
+        if (onUpdate) {
+          onUpdate(jogoAtualizado);
+        }
+        
+        showToast('Categoria adicionada com sucesso!', 'success');
       }
     } catch (error) {
-      showToast('Erro ao adicionar categoria', 'error');
+      console.error('Erro ao adicionar categoria:', error);
+      showToast('Erro ao adicionar categoria: ' + (error.response?.data?.message || error.message), 'error');
     }
   };
 
+  // Modifique a função removerTag para passar o jogo atualizado:
   const removerTag = async (tagName) => {
     try {
       const response = await axios.delete(
@@ -144,147 +198,186 @@ export default function JogoModal({ jogo, onClose, onUpdate, onDelete }) {
           headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
         }
       );
-
+      
+      // Verifique o status explicitamente
       if (response.status === 200) {
-        setTagsJogo(tagsJogo.filter(tag => tag !== tagName));
-        showToast('Categoria removida com sucesso', 'success');
+        // Atualiza o estado local
+        const novasCategorias = tagsJogo.filter(tag => tag !== tagName);
+        setTagsJogo(novasCategorias);
+        
+        // Cria um objeto jogo atualizado para passar para onUpdate
+        const jogoAtualizado = {
+          ...jogo,
+          categorias: novasCategorias
+        };
+        
+        // Notifica o componente pai COM o jogo atualizado
+        if (onUpdate) {
+          onUpdate(jogoAtualizado);
+        }
+        
+        // Exibe toast de sucesso
+        showToast('Categoria removida com sucesso!', 'success');
+      } else {
+        // Caso improvável, mas para cobrir todos os casos
+        console.warn('Status inesperado na resposta:', response.status);
+        showToast('Resposta inesperada do servidor', 'warning');
       }
     } catch (error) {
-      showToast('Erro ao remover categoria', 'error');
+      console.error('Erro ao remover categoria:', error);
+      
+      // Exibe mensagem de erro específica
+      const errorMsg = error.response?.data?.error || 'Erro ao remover categoria';
+      showToast(errorMsg, 'error');
+    }
+  };
+
+  const excluirJogo = () => {
+    if (window.confirm('Tem certeza que deseja excluir este jogo?')) {
+      onDelete(jogo.id);
+    }
+  };
+
+  const handleBackdropClick = (e) => {
+    // Verifica se o clique foi fora da modal
+    if (e.target.classList.contains('wrapper-modal')) {
+      onClose();
     }
   };
 
   return (
-    <div className="wrapper-modal">
-      <div className="modal-container">
-        <ToastAlert 
-          show={toast.show}
-          message={toast.message}
-          type={toast.type}
-          onClose={hideToast}
-        />
-        
-        <form onSubmit={handleSubmit}>
+    <div className="wrapper-modal" onClick={handleBackdropClick}>
+      <ToastAlert
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
+      
+      <div className="modal-container glass-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Editar Jogo</h3>
           <button 
-            type="button"
-            onClick={onClose} 
-            className="absolute w-7 h-7 top-2 right-2 p-1 hover:bg-gray-700 rounded-full transition-colors"
+            onClick={onClose}
+            className="modal-close-btn"
+            aria-label="Fechar"
           >
-            <IonIcon icon={closeOutline} className="w-5 h-5" />
+            <IonIcon icon={closeOutline} />
           </button>
+        </div>
 
-          <h2>Editar Jogo</h2>
-
-          <div className="element-box">
-            <div className="input-box">
-              <input
-                type="text"
-                name="nome"
-                value={formData.nome}
-                onChange={handleChange}
-                placeholder=" "
-                required
-              />
-              <label>Nome</label>
-            </div>
-          </div>
-
-          <div className="element-box">
-            <div className="input-box">
-              <input
-                type="number"
-                name="ano"
-                value={formData.ano}
-                onChange={handleChange}
-                placeholder=" "
-                required
-              />
-              <label>Ano</label>
-            </div>
-          </div>
-
-          <div className="element-box">
-            <div className="input-box">
-              <input
-                type="text"
-                name="genero"
-                value={formData.genero}
-                onChange={handleChange}
-                placeholder=" "
-                required
-              />
-              <label>Gênero</label>
-            </div>
-          </div>
-
-          <div className="element-box">
-            <div className="input-box">
-              <input
-                type="file"
-                name="imagem"
-                onChange={handleImageChange}
-                accept="image/*"
-                className="pt-2"
-              />
-              <label>Nova Imagem</label>
-            </div>
-          </div>
-
-          <div className="element-box">
-            <div className="input-box">
-              <select
-                value={categoriaSelecionada}
-                onChange={(e) => setCategoriaSelecionada(e.target.value)}
-                className="w-full p-2 bg-gray-700 text-white rounded"
-              >
-                <option value="">Selecione uma categoria</option>
-                {categorias.map(cat => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={adicionarTag}
-              className="mt-2 w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Adicionar Categoria
-            </button>
-          </div>
-
-          <div className="tags-container">
-            {tagsJogo.map((tag, index) => (
-              <span key={index} className="tag">
-                {tag}
-                <IonIcon
-                  icon={closeCircleOutline}
-                  className="tag-remove"
-                  onClick={() => removerTag(tag)}
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-group">
+              <div className="input-box modal-input">
+                <input
+                  type="text"
+                  name="nome"
+                  value={formData.nome}
+                  onChange={handleChange}
+                  placeholder=" "
+                  required
                 />
-              </span>
-            ))}
+                <label>Nome</label>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <div className="input-box modal-input">
+                <input
+                  type="number"
+                  name="ano"
+                  value={formData.ano}
+                  onChange={handleChange}
+                  placeholder=" "
+                  required
+                />
+                <label>Ano</label>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <div className="input-box modal-input">
+                <input
+                  type="text"
+                  name="genero"
+                  value={formData.genero}
+                  onChange={handleChange}
+                  placeholder=" "
+                  required
+                />
+                <label>Descrição</label>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <div className="input-box modal-input">
+                <input
+                  type="file"
+                  name="imagem"
+                  onChange={handleImageChange}
+                  accept="image/*"
+                  className="pt-2"
+                />
+                <label>Nova Imagem</label>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Adicionar Categoria</label>
+              <div className="category-input-group">
+                <div className="category-select-container">
+                  <select
+                    value={categoriaSelecionada}
+                    onChange={(e) => setCategoriaSelecionada(e.target.value)}
+                    className="category-select"
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    {categorias.map(cat => (
+                      <option key={cat.id} value={cat.nome}>
+                        {cat.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={adicionarTag}
+                  className="add-category-btn"
+                  disabled={!categoriaSelecionada}
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+
+            <div className="tags-container">
+              {tagsJogo.map((tag, index) => (
+                <span key={index} className="game-tag">
+                  {tag}
+                  <IonIcon
+                    icon={closeCircleOutline}
+                    className="tag-remove"
+                    onClick={() => removerTag(tag)}
+                  />
+                </span>
+              ))}
+            </div>
           </div>
 
-          <div className="element-box flex gap-2">
+          <div className="modal-footer">
             <button 
-              type="submit" 
-              className="flex-1 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Salvar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm('Tem certeza que deseja excluir este jogo?')) {
-                  onDelete(jogo.id);
-                  onClose();
-                }
-              }}
-              className="flex-1 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              type="button" 
+              className="glass-action-btn delete"
+              onClick={excluirJogo}
             >
               Excluir
+            </button>
+            <button 
+              type="submit" 
+              className="glass-action-btn save"
+            >
+              Salvar Alterações
             </button>
           </div>
         </form>
@@ -292,3 +385,5 @@ export default function JogoModal({ jogo, onClose, onUpdate, onDelete }) {
     </div>
   );
 }
+
+export default JogoModal;

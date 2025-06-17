@@ -1,7 +1,6 @@
 import React, { Fragment, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Transition } from '@headlessui/react';
-import { CheckCircleIcon, XCircleIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
 export default function ToastAlert({ show, message, type, onClose, duration = 5000 }) {
   // Auto-fechamento após o tempo definido
@@ -27,25 +26,24 @@ export default function ToastAlert({ show, message, type, onClose, duration = 50
       leaveTo="translate-x-full opacity-0"
     >
       <div className="toast-container">
-        <div className={`toast-notification toast-${type}`}>
+        <div className={`toast-alert ${type}`}>
+          {/* Ícones baseados no tipo */}
           <div className="toast-icon">
-            {type === 'success' && <CheckCircleIcon className="h-6 w-6" />}
-            {type === 'error' && <XCircleIcon className="h-6 w-6" />}
-            {(type === 'info' || type === 'warning') && <InformationCircleIcon className="h-6 w-6" />}
+            {type === 'success' && <span>✓</span>}
+            {type === 'error' && <span>✕</span>}
+            {type === 'info' && <span>ℹ</span>}
+            {type === 'warning' && <span>⚠</span>}
           </div>
-          <div className="toast-content">
-            <p>{message}</p>
-          </div>
-          <button className="toast-close" onClick={onClose}>
-            <XMarkIcon className="h-5 w-5" />
-          </button>
           
-          <div className="toast-progress-container">
-            <div 
-              className="toast-progress" 
-              style={{ animationDuration: `${duration}ms` }}
-            ></div>
-          </div>
+          <div className="toast-content">{message}</div>
+          
+          <button 
+            className="toast-close" 
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            ×
+          </button>
         </div>
       </div>
     </Transition>,

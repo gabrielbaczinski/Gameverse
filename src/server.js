@@ -630,15 +630,39 @@ app.post("/api/jogos/:id/categorias", authenticate, (req, res) => {
 
 app.delete("/api/jogos/:id", authenticate, (req, res) => {
   const { id } = req.params;
-  const userId = req.userId;
+  
+  // Se você deseja que qualquer usuário autenticado possa excluir
+  const query = "DELETE FROM jogos WHERE id = ?";
+  
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error("Erro ao excluir jogo:", err);
+      return res.status(500).json({ 
+        error: "Erro ao deletar jogo",
+        toast: {
+          message: "Erro ao excluir jogo",
+          type: "error"
+        }
+      });
+    }
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        error: "Jogo não encontrado",
+        toast: {
+          message: "Jogo não encontrado",
+          type: "error"
+        }
+      });
+    }
 
-  const query = "DELETE FROM jogos WHERE id = ? AND userId = ?";
-
-  db.query(query, [id, userId], (err, result) => {
-    if (err) return res.status(500).json({ error: "Erro ao deletar jogo" });
-    if (result.affectedRows === 0) return res.status(404).json({ error: "Jogo não encontrado" });
-
-    res.status(200).json({ message: "Jogo deletado com sucesso" });
+    res.status(200).json({ 
+      message: "Jogo deletado com sucesso",
+      toast: {
+        message: "Jogo excluído com sucesso!",
+        type: "success"
+      }
+    });
   });
 });
 
@@ -763,21 +787,58 @@ app.post('/api/verificar-codigo', async (req, res) => {
 });
 
 // Listar todas as categorias
+// Endpoint para buscar categorias (filtradas por usuário)
 app.get("/api/categorias", authenticate, (req, res) => {
-  const query = "SELECT * FROM categorias ORDER BY nome";
+  const userId = req.userId; // ID do usuário autenticado
+
+  const query = "SELECT * FROM categorias WHERE userId = ? ORDER BY nome";
   
-  db.query(query, (err, results) => {
+  db.query(query, [userId], (err, results) => {
     if (err) {
       console.error("Erro ao buscar categorias:", err);
-      return res.status(500).json({ 
-        error: "Erro ao buscar categorias",
-        toast: {
-          message: "Erro ao carregar categorias",
-          type: "error"
-        }
-      });
+      return res.status(500).json({ error: "Erro ao buscar categorias" });
     }
+    
     res.json(results);
+  });
+});
+
+// Endpoint para criar uma categoria
+app.post("/api/categorias", authenticate, (req, res) => {
+  const { nome } = req.body;
+  const userId = req.userId; // ID do usuário autenticado
+  
+  if (!nome) {
+    return res.status(400).json({ error: "Nome da categoria não fornecido" });
+  }
+
+  // Verificar se a categoria já existe para este usuário
+  const checkQuery = "SELECT * FROM categorias WHERE nome = ? AND userId = ?";
+  db.query(checkQuery, [nome, userId], (checkErr, checkResults) => {
+    if (checkErr) {
+      console.error("Erro ao verificar categoria:", checkErr);
+      return res.status(500).json({ error: "Erro interno" });
+    }
+    
+    if (checkResults.length > 0) {
+      return res.status(409).json({ error: "Categoria já existe" });
+    }
+    
+    // Inserir nova categoria associada ao usuário
+    const insertQuery = "INSERT INTO categorias (nome, userId) VALUES (?, ?)";
+    db.query(insertQuery, [nome, userId], (insertErr, insertResult) => {
+      if (insertErr) {
+        console.error("Erro ao criar categoria:", insertErr);
+        return res.status(500).json({ error: "Erro ao criar categoria" });
+      }
+      
+      res.status(201).json({
+        id: insertResult.insertId,
+        nome: nome,
+        userId: userId,
+        message: "Categoria criada com sucesso"
+      });
+    });
   });
 });
 
@@ -905,24 +966,51 @@ app.delete("/api/categorias/:id", authenticate, (req, res) => {
   });
 });
 
-// Adicionar categoria a um jogo
-app.post("/api/jogos/:id/categorias", authenticate, (req, res) => {
-  const { id } = req.params;
-  const { categorias } = req.body;
-
-  if (!categorias || !Array.isArray(categorias)) {
-    return res.status(400).json({ error: "Categorias inválidas" });
-  }
-
-  const sql = "INSERT INTO jogo_categorias (jogo_id, categoria_id) VALUES (?, ?)";
+// Endpoint para buscar categoria pelo nome
+app.get("/api/categorias/nome/:nome", authenticate, (req, res) => {
+  const { nome } = req.params;
   
-  db.query(sql, [id, categorias[0]], (err, result) => {
+  const query = "SELECT * FROM categorias WHERE nome = ?";
+  
+  db.query(query, [nome], (err, results) => {
     if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Erro ao adicionar categoria" });
+      console.error("Erro ao buscar categoria por nome:", err);
+      return res.status(500).json({ error: "Erro ao buscar categoria" });
     }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Categoria não encontrada" });
+    }
+    
+    res.json(results[0]);
+  });
+});
 
-    res.json({ message: "Categoria adicionada com sucesso" });
+// Endpoint para buscar categoria por nome com query parameter
+app.get("/api/categorias/busca", authenticate, (req, res) => {
+  const { nome } = req.query;
+  
+  if (!nome) {
+    return res.status(400).json({ error: "Nome de categoria não fornecido" });
+  }
+  
+  console.log(`[API] Buscando categoria com nome: "${nome}"`);
+  
+  const query = "SELECT * FROM categorias WHERE nome = ?";
+  
+  db.query(query, [nome], (err, results) => {
+    if (err) {
+      console.error("Erro ao buscar categoria por nome:", err);
+      return res.status(500).json({ error: "Erro ao buscar categoria" });
+    }
+    
+    if (results.length === 0) {
+      console.log(`[API] Categoria "${nome}" não encontrada`);
+      return res.status(404).json({ error: "Categoria não encontrada" });
+    }
+    
+    console.log(`[API] Categoria encontrada com ID: ${results[0].id}`);
+    res.json(results[0]);
   });
 });
 
@@ -950,6 +1038,112 @@ app.get("/api/categorias/:id/jogos", authenticate, async (req, res) => {
   } finally {
     conn.release();
   }
+});
+
+// Adicione esta rota para remover categorias de um jogo
+
+app.delete("/api/jogos/:id/categorias/:nome", authenticate, (req, res) => {
+  const { id, nome } = req.params;
+  
+  // Primeiro, encontre o ID da categoria pelo nome
+  const findCategoriaQuery = "SELECT id FROM categorias WHERE nome = ?";
+  
+  db.query(findCategoriaQuery, [nome], (err, results) => {
+    if (err) {
+      console.error("Erro ao buscar categoria:", err);
+      return res.status(500).json({ error: "Erro ao remover categoria" });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Categoria não encontrada" });
+    }
+    
+    const categoriaId = results[0].id;
+    
+    // Remover a relação entre jogo e categoria
+    const deleteQuery = "DELETE FROM jogo_categorias WHERE jogo_id = ? AND categoria_id = ?";
+    
+    db.query(deleteQuery, [id, categoriaId], (err, result) => {
+      if (err) {
+        console.error("Erro ao remover categoria do jogo:", err);
+        return res.status(500).json({ error: "Erro ao remover categoria do jogo" });
+      }
+      
+      res.status(200).json({ message: "Categoria removida com sucesso" });
+    });
+  });
+});
+
+// Endpoint para adicionar categoria a um jogo por nome
+app.post("/api/jogos/:id/categorias/nome", authenticate, (req, res) => {
+  const { id } = req.params;
+  const { nome } = req.body;
+  const userId = req.userId;
+  
+  if (!nome) {
+    return res.status(400).json({ error: "Nome da categoria não fornecido" });
+  }
+  
+  // Buscar categoria do usuário por nome
+  const checkCategoriaQuery = "SELECT id FROM categorias WHERE nome = ? AND userId = ?";
+  db.query(checkCategoriaQuery, [nome, userId], (err, results) => {
+    if (err) {
+      console.error("Erro ao verificar categoria:", err);
+      return res.status(500).json({ error: "Erro ao verificar categoria" });
+    }
+    
+    let categoriaId;
+    
+    // Se a categoria não existe, criar
+    if (results.length === 0) {
+      const createCategoriaQuery = "INSERT INTO categorias (nome, userId) VALUES (?, ?)";
+      db.query(createCategoriaQuery, [nome, userId], (createErr, createResult) => {
+        if (createErr) {
+          console.error("Erro ao criar categoria:", createErr);
+          return res.status(500).json({ error: "Erro ao criar categoria" });
+        }
+        
+        categoriaId = createResult.insertId;
+        associarCategoria();
+      });
+    } else {
+      // A categoria já existe
+      categoriaId = results[0].id;
+      associarCategoria();
+    }
+    
+    // Função para associar a categoria ao jogo
+    function associarCategoria() {
+      // Verificar se a associação já existe
+      const checkAssocQuery = "SELECT * FROM jogo_categorias WHERE jogo_id = ? AND categoria_id = ?";
+      db.query(checkAssocQuery, [parseInt(id), categoriaId], (checkAssocErr, checkAssocResult) => {
+        if (checkAssocErr) {
+          console.error("Erro ao verificar associação:", checkAssocErr);
+          return res.status(500).json({ error: "Erro ao verificar associação" });
+        }
+        
+        // Se a associação já existe, não precisa fazer nada
+        if (checkAssocResult.length > 0) {
+          return res.status(200).json({ message: "Categoria já associada ao jogo" });
+        }
+        
+        // Criar a associação
+        const addAssocQuery = "INSERT INTO jogo_categorias (jogo_id, categoria_id) VALUES (?, ?)";
+        db.query(addAssocQuery, [parseInt(id), categoriaId], (addAssocErr) => {
+          if (addAssocErr) {
+            console.error("Erro ao associar categoria:", addAssocErr);
+            return res.status(500).json({ error: "Erro ao associar categoria ao jogo" });
+          }
+          
+          res.status(200).json({ 
+            message: "Categoria adicionada com sucesso",
+            categoriaId,
+            nome
+          });
+        });
+      });
+    }
+  });
 });
 
 // Inicia o servidor
