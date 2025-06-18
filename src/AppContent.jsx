@@ -13,6 +13,7 @@ import RedefinirSenha from './telas/RedefinirSenha';
 import ResetarSenhaConfirmacao from './telas/ResetarSenhaConfirmacao';
 import GerenciarUsuarios from './telas/GerenciarUsuarios';
 import GerenciarCategorias from './telas/GerenciarCategorias';
+import TelaAvaliacoes from './telas/TelaAvaliacoes';
 
 function AppContent() {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ function AppContent() {
         <Route path="/resetar-senha-confirmacao/:token" element={<ResetarSenhaConfirmacao />} />
         <Route path="/categorias" element={<GerenciarCategorias />} />
         <Route path="/usuarios" element={<GerenciarUsuarios />} />
+        <Route path="/avaliacoes" element={<TelaAvaliacoes />} />
       </Routes>
       <Footer />
     </>

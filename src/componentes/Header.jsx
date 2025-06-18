@@ -28,7 +28,7 @@ function Header() {
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
             <div className="flex-1 md:flex md:items-center md:gap-12">
-              <Link className="block text-blue-600 flex items-center gap-2" to="/">
+              <Link className="text-blue-600 flex items-center gap-2" to="/">
               <IonIcon icon={gameControllerOutline} className="h-8 w-8" />
               <span className="text-white text-xl font-bold">Gameverse</span>
             </Link>
@@ -78,6 +78,12 @@ function Header() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/avaliacoes" className="flex items-center gap-2 text-gray-500 transition hover:text-gray-500/75 dark:text-white dark:hover:text-white/75">
+                    <IonIcon icon={book} />
+                    Avaliações
+                  </Link>
+                </li>
+                <li>
                   
                   <button 
                     onClick={handleLogout}
@@ -101,7 +107,7 @@ function Header() {
       <div className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
          <div className="flex-1 md:flex md:items-center md:gap-12">
-            <Link className="block text-blue-600 flex items-center gap-2" to="/">
+            <Link className="text-blue-600 flex items-center gap-2" to="/">
               <IonIcon icon={gameControllerOutline} className="h-8 w-8" />
               <span className="text-white text-xl font-bold">Gameverse</span>
             </Link>

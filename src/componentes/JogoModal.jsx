@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { IonIcon } from '@ionic/react';
-import { closeOutline, closeCircleOutline, cloudUploadOutline, globeOutline } from 'ionicons/icons';
+import { closeOutline, closeCircleOutline, cloudUploadOutline, globeOutline, gameControllerOutline, lockClosedOutline, lockOpenOutline } from 'ionicons/icons';
 import axios from 'axios';
 import ToastAlert from './Toast';
+import AvaliacaoJogo from '../componentes/AvaliacaoJogo';
 
 const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
   const [formData, setFormData] = useState({
@@ -18,11 +19,15 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
   const [tagsJogo, setTagsJogo] = useState([]);
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState([]);
+  const [mediaAvaliacoes, setMediaAvaliacoes] = useState(null);
   const [toast, setToast] = useState({
     show: false,
     message: '',
     type: 'info'
   });
+  const [privado, setPrivado] = useState(jogo.privado === 1);
+  const usuarioAtual = parseInt(localStorage.getItem('userId'));
+  const isOwner = jogo.userId === usuarioAtual;
 
   // Inicializar as tags do jogo
   useEffect(() => {
@@ -264,6 +269,43 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
     }
   };
 
+  // Carregar média das avaliações
+  useEffect(() => {
+    const carregarMedia = async () => {
+      try {
+        const response = await axios.get(`http://localhost:5000/api/jogos/${jogo.id}/avaliacoes`);
+        if (response.data.length > 0) {
+          const soma = response.data.reduce((acc, av) => acc + av.pontuacao, 0);
+          setMediaAvaliacoes(soma / response.data.length);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar avaliações:", error);
+      }
+    };
+    
+    carregarMedia();
+  }, [jogo.id]);
+
+  // Adicione esta função
+  const togglePrivacidade = async () => {
+    try {
+      const novoStatus = !privado;
+      const response = await axios.put(
+        `http://localhost:5000/api/jogos/${jogo.id}/privado`,
+        { privado: novoStatus },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } }
+      );
+      
+      if (response.status === 200) {
+        setPrivado(novoStatus);
+        // Se tiver um handler de atualização, chame-o
+        if (onUpdate) onUpdate();
+      }
+    } catch (error) {
+      console.error("Erro ao alterar status de privacidade:", error);
+    }
+  };
+  
   return (
     <div className="wrapper-modal" onClick={handleBackdropClick}>
       <ToastAlert
@@ -443,6 +485,45 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
                 </span>
               ))}
             </div>
+
+            {/* Adicione esta seção apenas se o usuário for o dono do jogo */}
+            {isOwner && (
+              <div className="privacidade-toggle">
+                <div className="privacidade-header">
+                  <h4>Visibilidade na Lista de Avaliações</h4>
+                </div>
+                <label className="switch-label">
+                  <span>
+                    <IonIcon icon={privado ? lockClosedOutline : lockOpenOutline} />
+                    {privado ? 'Jogo Privado' : 'Jogo Público'}
+                  </span>
+                  <div className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={privado}
+                      onChange={togglePrivacidade}
+                    />
+                    <span className="slider"></span>
+                  </div>
+                </label>
+                <p className="privacidade-info">
+                  {privado 
+                    ? "Seu jogo não aparecerá na lista global de avaliações dos outros usuários" 
+                    : "Seu jogo está visível para todos na lista de avaliações"}
+                </p>
+              </div>
+            )}
+
+            <div className="separador-secao"></div>
+            <div onClick={(e) => e.stopPropagation()}>
+              <AvaliacaoJogo 
+                jogoId={jogo.id} 
+                onUpdate={() => {
+                  // Pode usar para recarregar o jogo após uma atualização
+                  // de avaliação, se necessário
+                }} 
+              />
+            </div>
           </div>
 
           <div className="modal-footer">
@@ -466,4 +547,40 @@ const JogoModal = ({ jogo, onClose, onUpdate, onDelete }) => {
   );
 }
 
+const CardJogo = ({ jogo }) => {
+  const [mediaAvaliacoes, setMediaAvaliacoes] = useState(null);
+  
+  useEffect(() => {
+    // Carregar média das avaliações
+    const carregarMedia = async () => {
+      try {
+        const response = await axios.get(`http://localhost:5000/api/jogos/${jogo.id}/avaliacoes`);
+        if (response.data.length > 0) {
+          const soma = response.data.reduce((acc, av) => acc + av.pontuacao, 0);
+          setMediaAvaliacoes(soma / response.data.length);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar avaliações:", error);
+      }
+    };
+    
+    carregarMedia();
+  }, [jogo.id]);
+
+  return (
+    <div className="game-card glass-card">
+      {/* Conteúdo existente */}
+      
+      {/* Badge de avaliação */}
+      {mediaAvaliacoes && (
+        <div className="rating-badge">
+          <span className="rating-value">{mediaAvaliacoes.toFixed(1)}</span>
+          <IonIcon icon={gameControllerOutline} className="rating-icon" />
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default JogoModal;
+export { CardJogo };

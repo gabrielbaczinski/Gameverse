@@ -68,3 +68,23 @@ INSERT INTO categorias (nome, userId) VALUES
 ('Simulação', 1),
 ('Corrida', 1),
 ('Puzzle', 1);
+
+-- Tabela de avaliações de jogos
+CREATE TABLE avaliacoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    jogo_id INT NOT NULL,
+    usuario_id INT NOT NULL,
+    pontuacao TINYINT NOT NULL CHECK (pontuacao BETWEEN 1 AND 5),
+    texto TEXT,
+    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (jogo_id) REFERENCES jogos(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_avaliacao (jogo_id, usuario_id)
+);
+
+-- Índice para melhorar performance de buscas
+CREATE INDEX idx_avaliacoes_jogo ON avaliacoes(jogo_id);
+
+-- Execute esta query no seu banco de dados
+ALTER TABLE jogos ADD COLUMN privado BOOLEAN DEFAULT 0;

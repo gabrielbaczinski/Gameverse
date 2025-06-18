@@ -9,10 +9,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Configure multer for image uploads
+// Configuração de armazenamento para upload de imagens
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // Create uploads directory if it doesn't exist
     const dir = './uploads';
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -20,20 +19,18 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    // Generate unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-// Create multer instance with configuration
+// Configuração de validação para upload de arquivos
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 5 * 1024 * 1024
   },
   fileFilter: function (req, file, cb) {
-    // Allow only specific image formats
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
     if (!allowedTypes.includes(file.mimetype)) {
       const error = new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.');
@@ -48,12 +45,12 @@ const app = express();
 const port = 5000;
 
 app.use(cors());
-app.use(express.json()); // Necessário para interpretar JSON no body da requisição
+app.use(express.json());
 
-// Serve static files from uploads directory
+// Configuração para servir arquivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Configuração do banco de dados
+// Configuração de conexão com banco de dados
 const db = mysql.createConnection({
   host: "localhost",
   user: "root",
@@ -61,7 +58,6 @@ const db = mysql.createConnection({
   database: "gameverse",
 });
 
-// Conexão com o banco de dados
 db.connect((err) => {
   if (err) {
     console.error("Erro ao conectar ao banco de dados:", err);
@@ -70,9 +66,10 @@ db.connect((err) => {
   console.log("Conectado ao banco de dados!");
 });
 
+// Configuração do serviço de email
 const transporter = nodemailer.createTransport({
   host: 'localhost',
-  port: 1025, // porta do MailDev
+  port: 1025,
   secure: false,
   auth: {
     user: null,
@@ -83,17 +80,18 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-const JWT_SECRET = 'meusegredoabc'; // Mantenha seguro e fora do código em produção
+// Configuração de autenticação JWT
+const JWT_SECRET = 'meusegredoabc';
 const generateToken = (id, email) => {
-  return jwt.sign({ id: id, email: email }, JWT_SECRET, { expiresIn: '1h' }); // Aumentei para 1h
+  return jwt.sign({ id: id, email: email }, JWT_SECRET, { expiresIn: '1h' });
 };
 
-
+// Verifica validade do token JWT
 const verifyToken = (token) => {
   return jwt.verify(token, 'meusegredoabc');
 };
 
-// Middleware para verificar autenticação
+// Middleware de autenticação
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'Token não fornecido' });
@@ -110,10 +108,9 @@ function authenticate(req, res, next) {
   }
 }
 
-// Endpoint para pegar jogos
+// Busca jogos do usuário autenticado
 app.get("/api/jogos", authenticate, (req, res) => {
   try {
-    // 1. Buscar todos os jogos do usuário
     db.query(
       "SELECT * FROM jogos WHERE userId = ?",
       [req.userId],
@@ -123,15 +120,12 @@ app.get("/api/jogos", authenticate, (req, res) => {
           return res.status(500).json({ message: "Erro ao buscar jogos" });
         }
 
-        // Se não há jogos, retorne uma array vazia
         if (jogos.length === 0) {
           return res.json([]);
         }
 
-        // 2. Para cada jogo, buscar suas categorias
         let processed = 0;
         jogos.forEach((jogo) => {
-          // Observe o nome correto da tabela: jogo_categorias (singular)
           db.query(
             `SELECT c.nome 
              FROM jogo_categorias jc 
@@ -141,7 +135,6 @@ app.get("/api/jogos", authenticate, (req, res) => {
             (err, categorias) => {
               processed++;
 
-              // Adicionar array de categorias ao jogo
               if (err) {
                 console.error(`Erro ao buscar categorias do jogo ${jogo.id}:`, err);
                 jogo.categorias = [];
@@ -149,7 +142,6 @@ app.get("/api/jogos", authenticate, (req, res) => {
                 jogo.categorias = categorias.map(c => c.nome);
               }
 
-              // Quando todos os jogos tiverem sido processados, enviar resposta
               if (processed === jogos.length) {
                 res.json(jogos);
               }
@@ -164,8 +156,7 @@ app.get("/api/jogos", authenticate, (req, res) => {
   }
 });
 
-// Substitua o endpoint POST /api/jogos existente:
-
+// Cadastra novo jogo com imagem
 app.post("/api/jogos", authenticate, upload.single('imagem'), async (req, res) => {
   try {
     console.log("Dados recebidos:", req.body);
@@ -173,14 +164,11 @@ app.post("/api/jogos", authenticate, upload.single('imagem'), async (req, res) =
     
     const { nome, ano, genero, imagemUrl } = req.body;
     
-    // Determinar o caminho da imagem
     let imagem;
     if (req.file) {
-      // Caso de upload de arquivo
       imagem = `/uploads/${req.file.filename}`;
       console.log("Usando arquivo enviado:", imagem);
     } else if (imagemUrl) {
-      // Caso de URL externa
       imagem = imagemUrl;
       console.log("Usando URL externa:", imagem);
     } else {
@@ -190,7 +178,6 @@ app.post("/api/jogos", authenticate, upload.single('imagem'), async (req, res) =
       });
     }
 
-    // Validação de campos obrigatórios
     if (!nome || !ano || !genero) {
       return res.status(400).json({
         message: "Nome, ano e gênero são obrigatórios",
@@ -198,7 +185,6 @@ app.post("/api/jogos", authenticate, upload.single('imagem'), async (req, res) =
       });
     }
 
-    // Inserir dados no banco
     const query = "INSERT INTO jogos (nome, ano, genero, imagem, userId) VALUES (?, ?, ?, ?, ?)";
     
     db.query(query, [nome, ano, genero, imagem, req.userId], (err, result) => {
@@ -226,7 +212,7 @@ app.post("/api/jogos", authenticate, upload.single('imagem'), async (req, res) =
   }
 });
 
-// Endpoint para buscar jogos com suas categorias
+// Busca jogos com categorias (método alternativo)
 app.get("/api/jogos", authenticate, async (req, res) => {
   try {
     const conn = await pool.getConnection();
@@ -250,7 +236,7 @@ app.get("/api/jogos", authenticate, async (req, res) => {
   }
 });
 
-// Cadastrar usuário
+// Cadastra novo usuário
 app.post("/api/usuarios", async (req, res) => {
   const { nome, email, senha } = req.body;
 
@@ -292,7 +278,7 @@ app.post("/api/usuarios", async (req, res) => {
   }
 });
 
-// Login com token JWT
+// Realiza login de usuário
 app.post("/api/login", async (req, res) => {
   const { email, senha } = req.body;
 
@@ -332,7 +318,6 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
-    // Gera código de verificação
     const codigoVerificacao = Math.floor(100000 + Math.random() * 900000).toString();
     
     const updateQuery = "UPDATE usuarios SET codigoVerificacao = ? WHERE id = ?";
@@ -381,7 +366,8 @@ app.post("/api/login", async (req, res) => {
   });
 });
 
-app.post("/api/redefinir-senha", (req, res) => { // Mantendo o nome do endpoint do seu frontend
+// Inicia processo de redefinição de senha
+app.post("/api/redefinir-senha", (req, res) => {
   const { email } = req.body;
 
   if (!email) {
@@ -396,15 +382,13 @@ app.post("/api/redefinir-senha", (req, res) => { // Mantendo o nome do endpoint 
     }
 
     if (users.length === 0) {
-      // NÃO informe que o email não foi encontrado por questões de segurança.
-      // O frontend já exibe uma mensagem genérica.
       console.log(`Tentativa de redefinição para email não cadastrado: ${email}`);
       return res.status(200).json({ message: "Se o email estiver cadastrado, você receberá um link para redefinir sua senha." });
     }
 
     const user = users[0];
-    const resetToken = crypto.randomBytes(32).toString('hex'); // Token seguro
-    const resetTokenExpiration = Date.now() + 3600000; // Expira em 1 hora (em milissegundos)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiration = Date.now() + 3600000;
 
     const queryUpdateToken = "UPDATE usuarios SET reset_password_token = ?, reset_password_expires = ? WHERE id = ?";
     db.query(queryUpdateToken, [resetToken, new Date(resetTokenExpiration), user.id], async (errUpdate) => {
@@ -416,9 +400,8 @@ app.post("/api/redefinir-senha", (req, res) => { // Mantendo o nome do endpoint 
     
       const resetLink = `http://localhost:3000/resetar-senha-confirmacao/${resetToken}`;
 
-      // Configurações do email
       const mailOptions = {
-        from: '"GameVerse Admin" <no-reply@gameverse.com>', // Seu email "de"
+        from: '"GameVerse Admin" <no-reply@gameverse.com>',
         to: user.email,
         subject: 'Redefinição de Senha - GameVerse',
         html: `
@@ -432,7 +415,7 @@ app.post("/api/redefinir-senha", (req, res) => { // Mantendo o nome do endpoint 
       try {
         let info = await transporter.sendMail(mailOptions);
         console.log('Email enviado: %s', info.messageId);
-        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info)); // Para Ethereal
+        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
 
         console.log(`Link de redefinição para ${user.email}: ${resetLink}`);
 
@@ -440,14 +423,13 @@ app.post("/api/redefinir-senha", (req, res) => { // Mantendo o nome do endpoint 
         res.status(200).json({ message: "Se o email estiver cadastrado, você receberá um link para redefinir sua senha." });
       } catch (emailError) {
         console.error("Erro ao enviar email de redefinição:", emailError);
-        // Mesmo que o email falhe, o token está no banco.
-        // Poderia tentar reenviar ou logar, mas para o usuário, a resposta pode ser a mesma.
         res.status(500).json({ message: "Erro ao enviar email de redefinição. Tente novamente mais tarde." });
       }
     });
   });
 });
 
+// Confirma redefinição de senha com token
 app.post("/api/resetar-senha-confirmacao/:token", async (req, res) => {
   const { token } = req.params;
   const { novaSenha } = req.body;
@@ -455,7 +437,7 @@ app.post("/api/resetar-senha-confirmacao/:token", async (req, res) => {
   if (!novaSenha) {
     return res.status(400).json({ message: "Nova senha é obrigatória." });
   }
-  if (novaSenha.length < 6) { // Exemplo de validação de senha
+  if (novaSenha.length < 6) {
     return res.status(400).json({ message: "A nova senha deve ter pelo menos 6 caracteres." });
   }
 
@@ -491,7 +473,7 @@ app.post("/api/resetar-senha-confirmacao/:token", async (req, res) => {
   });
 });
 
-// GET de todos os usuários (protegido)
+// Lista todos os usuários
 app.get('/api/usuarios', authenticate, (req, res) => {
   const query = "SELECT id, nome FROM usuarios";
   db.query(query, (err, results) => {
@@ -500,7 +482,7 @@ app.get('/api/usuarios', authenticate, (req, res) => {
   });
 });
 
-// GET usuário por ID
+// Busca usuário por ID
 app.get('/api/usuarios/:id', authenticate, (req, res) => {
   const { id } = req.params;
   const query = "SELECT id, nome, email FROM usuarios WHERE id = ?";
@@ -511,6 +493,7 @@ app.get('/api/usuarios/:id', authenticate, (req, res) => {
   });
 });
 
+// Busca perfil do usuário logado
 app.get('/api/perfil', authenticate, (req, res) => {
   const userId = req.userId;
   const query = "SELECT id, nome, email FROM usuarios WHERE id = ?";
@@ -521,9 +504,7 @@ app.get('/api/perfil', authenticate, (req, res) => {
   });
 });
 
-
-
-// POST para criar ou atualizar usuário
+// Cria ou atualiza usuário
 app.post('/api/usuario', (req, res) => {
   const { id, nome } = req.body;
 
@@ -542,6 +523,7 @@ app.post('/api/usuario', (req, res) => {
   }
 });
 
+// Atualiza jogo existente
 app.put("/api/jogos/:id", authenticate, upload.single('imagem'), (req, res) => {
   const { id } = req.params;
   const { nome, ano, genero } = req.body;
@@ -569,7 +551,6 @@ app.put("/api/jogos/:id", authenticate, upload.single('imagem'), (req, res) => {
       });
     }
 
-    // Após atualizar, buscar o jogo atualizado
     const selectSql = `
       SELECT j.*, GROUP_CONCAT(c.nome) as categorias 
       FROM jogos j
@@ -607,7 +588,7 @@ app.put("/api/jogos/:id", authenticate, upload.single('imagem'), (req, res) => {
   });
 });
 
-// Add category to game - simple and direct
+// Adiciona categorias ao jogo
 app.post("/api/jogos/:id/categorias", authenticate, (req, res) => {
   const { id } = req.params;
   const { categorias } = req.body;
@@ -628,10 +609,10 @@ app.post("/api/jogos/:id/categorias", authenticate, (req, res) => {
   });
 });
 
+// Remove jogo do catálogo
 app.delete("/api/jogos/:id", authenticate, (req, res) => {
   const { id } = req.params;
   
-  // Se você deseja que qualquer usuário autenticado possa excluir
   const query = "DELETE FROM jogos WHERE id = ?";
   
   db.query(query, [id], (err, result) => {
@@ -666,9 +647,7 @@ app.delete("/api/jogos/:id", authenticate, (req, res) => {
   });
 });
 
-// Adicione estes endpoints após os existentes
-
-// Listar todos os usuários
+// Lista todos os usuários (segunda definição)
 app.get("/api/usuarios", authenticate, (req, res) => {
   const query = "SELECT id, nome, email FROM usuarios";
   db.query(query, (err, results) => {
@@ -677,7 +656,7 @@ app.get("/api/usuarios", authenticate, (req, res) => {
   });
 });
 
-// Deletar usuário
+// Remove usuário do sistema
 app.delete("/api/usuarios/:id", authenticate, (req, res) => {
   const { id } = req.params;
   const query = "DELETE FROM usuarios WHERE id = ?";
@@ -689,16 +668,14 @@ app.delete("/api/usuarios/:id", authenticate, (req, res) => {
   });
 });
 
-// Atualizar usuário
+// Atualiza dados do usuário
 app.put("/api/usuarios/:id", authenticate, (req, res) => {
   const { id } = req.params;
   const { nome, email, senha } = req.body;
 
-  // Start with basic fields
   let sql = "UPDATE usuarios SET nome = ?, email = ?";
   let values = [nome, email];
 
-  // If password is provided, update it too
   if (senha && senha.trim() !== '') {
     sql += ", senha = ?";
     const hashedPassword = bcrypt.hashSync(senha, 10);
@@ -730,8 +707,9 @@ app.put("/api/usuarios/:id", authenticate, (req, res) => {
   });
 });
 
+// Verifica código de autenticação
 app.post('/api/verificar-codigo', async (req, res) => {
-  const { email, codigo } = req.body;  // Espera email e codigo
+  const { email, codigo } = req.body;
 
   const query = "SELECT * FROM usuarios WHERE email = ? AND codigoVerificacao = ?";
   db.query(query, [email, codigo], async (err, results) => {
@@ -786,10 +764,9 @@ app.post('/api/verificar-codigo', async (req, res) => {
   });
 });
 
-// Listar todas as categorias
-// Endpoint para buscar categorias (filtradas por usuário)
+// Lista categorias do usuário
 app.get("/api/categorias", authenticate, (req, res) => {
-  const userId = req.userId; // ID do usuário autenticado
+  const userId = req.userId;
 
   const query = "SELECT * FROM categorias WHERE userId = ? ORDER BY nome";
   
@@ -803,16 +780,15 @@ app.get("/api/categorias", authenticate, (req, res) => {
   });
 });
 
-// Endpoint para criar uma categoria
+// Cria nova categoria
 app.post("/api/categorias", authenticate, (req, res) => {
   const { nome } = req.body;
-  const userId = req.userId; // ID do usuário autenticado
+  const userId = req.userId;
   
   if (!nome) {
     return res.status(400).json({ error: "Nome da categoria não fornecido" });
   }
 
-  // Verificar se a categoria já existe para este usuário
   const checkQuery = "SELECT * FROM categorias WHERE nome = ? AND userId = ?";
   db.query(checkQuery, [nome, userId], (checkErr, checkResults) => {
     if (checkErr) {
@@ -824,7 +800,6 @@ app.post("/api/categorias", authenticate, (req, res) => {
       return res.status(409).json({ error: "Categoria já existe" });
     }
     
-    // Inserir nova categoria associada ao usuário
     const insertQuery = "INSERT INTO categorias (nome, userId) VALUES (?, ?)";
     db.query(insertQuery, [nome, userId], (insertErr, insertResult) => {
       if (insertErr) {
@@ -842,7 +817,7 @@ app.post("/api/categorias", authenticate, (req, res) => {
   });
 });
 
-// Criar categoria
+// Cria categoria (método alternativo)
 app.post("/api/categorias", authenticate, async (req, res) => {
   const { nome } = req.body;
   
@@ -880,7 +855,7 @@ app.post("/api/categorias", authenticate, async (req, res) => {
   });
 });
 
-// Atualizar categoria
+// Atualiza categoria existente
 app.put("/api/categorias/:id", authenticate, (req, res) => {
   const { id } = req.params;
   const { nome } = req.body;
@@ -928,11 +903,10 @@ app.put("/api/categorias/:id", authenticate, (req, res) => {
   });
 });
 
-// Deletar categoria
+// Remove categoria
 app.delete("/api/categorias/:id", authenticate, (req, res) => {
   const { id } = req.params;
 
-  // Removi o filtro por usuario_id pois não existe na tabela
   const query = "DELETE FROM categorias WHERE id = ?";
   db.query(query, [id], (err, result) => {
     if (err) {
@@ -966,7 +940,7 @@ app.delete("/api/categorias/:id", authenticate, (req, res) => {
   });
 });
 
-// Endpoint para buscar categoria pelo nome
+// Busca categoria por nome exato
 app.get("/api/categorias/nome/:nome", authenticate, (req, res) => {
   const { nome } = req.params;
   
@@ -986,7 +960,7 @@ app.get("/api/categorias/nome/:nome", authenticate, (req, res) => {
   });
 });
 
-// Endpoint para buscar categoria por nome com query parameter
+// Busca categoria por nome via query parameter
 app.get("/api/categorias/busca", authenticate, (req, res) => {
   const { nome } = req.query;
   
@@ -1014,7 +988,7 @@ app.get("/api/categorias/busca", authenticate, (req, res) => {
   });
 });
 
-// Buscar jogos por categoria
+// Lista jogos de uma categoria específica
 app.get("/api/categorias/:id/jogos", authenticate, async (req, res) => {
   const { id } = req.params;
   
@@ -1040,12 +1014,10 @@ app.get("/api/categorias/:id/jogos", authenticate, async (req, res) => {
   }
 });
 
-// Adicione esta rota para remover categorias de um jogo
-
+// Remove uma categoria de um jogo
 app.delete("/api/jogos/:id/categorias/:nome", authenticate, (req, res) => {
   const { id, nome } = req.params;
   
-  // Primeiro, encontre o ID da categoria pelo nome
   const findCategoriaQuery = "SELECT id FROM categorias WHERE nome = ?";
   
   db.query(findCategoriaQuery, [nome], (err, results) => {
@@ -1060,7 +1032,6 @@ app.delete("/api/jogos/:id/categorias/:nome", authenticate, (req, res) => {
     
     const categoriaId = results[0].id;
     
-    // Remover a relação entre jogo e categoria
     const deleteQuery = "DELETE FROM jogo_categorias WHERE jogo_id = ? AND categoria_id = ?";
     
     db.query(deleteQuery, [id, categoriaId], (err, result) => {
@@ -1074,7 +1045,7 @@ app.delete("/api/jogos/:id/categorias/:nome", authenticate, (req, res) => {
   });
 });
 
-// Endpoint para adicionar categoria a um jogo por nome
+// Adiciona categoria a um jogo por nome
 app.post("/api/jogos/:id/categorias/nome", authenticate, (req, res) => {
   const { id } = req.params;
   const { nome } = req.body;
@@ -1084,7 +1055,6 @@ app.post("/api/jogos/:id/categorias/nome", authenticate, (req, res) => {
     return res.status(400).json({ error: "Nome da categoria não fornecido" });
   }
   
-  // Buscar categoria do usuário por nome
   const checkCategoriaQuery = "SELECT id FROM categorias WHERE nome = ? AND userId = ?";
   db.query(checkCategoriaQuery, [nome, userId], (err, results) => {
     if (err) {
@@ -1094,7 +1064,6 @@ app.post("/api/jogos/:id/categorias/nome", authenticate, (req, res) => {
     
     let categoriaId;
     
-    // Se a categoria não existe, criar
     if (results.length === 0) {
       const createCategoriaQuery = "INSERT INTO categorias (nome, userId) VALUES (?, ?)";
       db.query(createCategoriaQuery, [nome, userId], (createErr, createResult) => {
@@ -1107,14 +1076,11 @@ app.post("/api/jogos/:id/categorias/nome", authenticate, (req, res) => {
         associarCategoria();
       });
     } else {
-      // A categoria já existe
       categoriaId = results[0].id;
       associarCategoria();
     }
     
-    // Função para associar a categoria ao jogo
     function associarCategoria() {
-      // Verificar se a associação já existe
       const checkAssocQuery = "SELECT * FROM jogo_categorias WHERE jogo_id = ? AND categoria_id = ?";
       db.query(checkAssocQuery, [parseInt(id), categoriaId], (checkAssocErr, checkAssocResult) => {
         if (checkAssocErr) {
@@ -1122,12 +1088,10 @@ app.post("/api/jogos/:id/categorias/nome", authenticate, (req, res) => {
           return res.status(500).json({ error: "Erro ao verificar associação" });
         }
         
-        // Se a associação já existe, não precisa fazer nada
         if (checkAssocResult.length > 0) {
           return res.status(200).json({ message: "Categoria já associada ao jogo" });
         }
         
-        // Criar a associação
         const addAssocQuery = "INSERT INTO jogo_categorias (jogo_id, categoria_id) VALUES (?, ?)";
         db.query(addAssocQuery, [parseInt(id), categoriaId], (addAssocErr) => {
           if (addAssocErr) {
@@ -1146,7 +1110,211 @@ app.post("/api/jogos/:id/categorias/nome", authenticate, (req, res) => {
   });
 });
 
+// Cria ou atualiza avaliação de jogo
+app.post("/api/jogos/:id/avaliacao", authenticate, (req, res) => {
+  const { id } = req.params;
+  const { pontuacao, texto } = req.body;
+  const usuario_id = req.userId;
+
+  if (pontuacao < 1 || pontuacao > 5) {
+    return res.status(400).json({ error: "A pontuação deve estar entre 1 e 5" });
+  }
+
+  db.query("SELECT * FROM jogos WHERE id = ?", [id], (err, results) => {
+    if (err) {
+      console.error("Erro ao verificar jogo:", err);
+      return res.status(500).json({ error: "Erro ao processar avaliação" });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Jogo não encontrado" });
+    }
+
+    db.query(
+      "SELECT * FROM avaliacoes WHERE jogo_id = ? AND usuario_id = ?",
+      [id, usuario_id],
+      (err, results) => {
+        if (err) {
+          console.error("Erro ao verificar avaliação existente:", err);
+          return res.status(500).json({ error: "Erro ao processar avaliação" });
+        }
+
+        if (results.length > 0) {
+          db.query(
+            "UPDATE avaliacoes SET pontuacao = ?, texto = ? WHERE jogo_id = ? AND usuario_id = ?",
+            [pontuacao, texto, id, usuario_id],
+            (err, result) => {
+              if (err) {
+                console.error("Erro ao atualizar avaliação:", err);
+                return res.status(500).json({ error: "Erro ao atualizar avaliação" });
+              }
+              res.json({ 
+                message: "Avaliação atualizada com sucesso",
+                id: results[0].id,
+                pontuacao,
+                texto
+              });
+            }
+          );
+        } else {
+          db.query(
+            "INSERT INTO avaliacoes (jogo_id, usuario_id, pontuacao, texto) VALUES (?, ?, ?, ?)",
+            [id, usuario_id, pontuacao, texto],
+            (err, result) => {
+              if (err) {
+                console.error("Erro ao criar avaliação:", err);
+                return res.status(500).json({ error: "Erro ao criar avaliação" });
+              }
+              res.status(201).json({ 
+                message: "Avaliação criada com sucesso",
+                id: result.insertId,
+                pontuacao,
+                texto
+              });
+            }
+          );
+        }
+      }
+    );
+  });
+});
+
+// Lista avaliações de um jogo
+app.get("/api/jogos/:id/avaliacoes", authenticate, (req, res) => {
+  const { id } = req.params;
+  
+  db.query(`
+    SELECT a.*, u.nome as usuario_nome 
+    FROM avaliacoes a 
+    JOIN usuarios u ON a.usuario_id = u.id 
+    WHERE a.jogo_id = ? 
+    ORDER BY a.data_criacao DESC
+  `, [id], (err, results) => {
+    if (err) {
+      console.error("Erro ao buscar avaliações:", err);
+      return res.status(500).json({ error: "Erro ao buscar avaliações" });
+    }
+    
+    res.json(results);
+  });
+});
+
+// Remove avaliação de um jogo
+app.delete("/api/jogos/:jogoId/avaliacao", authenticate, (req, res) => {
+  const { jogoId } = req.params;
+  const usuario_id = req.userId;
+  
+  db.query(
+    "DELETE FROM avaliacoes WHERE jogo_id = ? AND usuario_id = ?",
+    [jogoId, usuario_id],
+    (err, result) => {
+      if (err) {
+        console.error("Erro ao excluir avaliação:", err);
+        return res.status(500).json({ error: "Erro ao excluir avaliação" });
+      }
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: "Avaliação não encontrada" });
+      }
+      
+      res.json({ message: "Avaliação excluída com sucesso" });
+    }
+  );
+});
+
+// Altera status de privacidade de um jogo
+app.put("/api/jogos/:id/privado", authenticate, (req, res) => {
+  const jogoId = req.params.id;
+  const { privado } = req.body;
+  
+  db.query("SELECT * FROM jogos WHERE id = ? AND userId = ?", [jogoId, req.userId], (err, result) => {
+    if (err) {
+      console.error("Erro ao verificar jogo:", err);
+      return res.status(500).json({ error: "Erro ao verificar jogo" });
+    }
+    
+    if (result.length === 0) {
+      return res.status(403).json({ error: "Você não tem permissão para modificar este jogo" });
+    }
+    
+    db.query("UPDATE jogos SET privado = ? WHERE id = ?", [privado ? 1 : 0, jogoId], (err) => {
+      if (err) {
+        console.error("Erro ao atualizar privacidade:", err);
+        return res.status(500).json({ error: "Erro ao atualizar status do jogo" });
+      }
+      
+      return res.json({ success: true, message: "Status de privacidade atualizado com sucesso" });
+    });
+  });
+});
+
+// Lista todos os jogos públicos ou do usuário
+app.get("/api/jogos/todos", authenticate, (req, res) => {
+  const query = "SELECT * FROM jogos WHERE privado = 0 OR userId = ? ORDER BY nome";
+  
+  db.query(query, [req.userId], (err, jogos) => {
+    if (err) {
+      console.error("Erro ao buscar jogos:", err);
+      return res.status(500).json({ error: "Erro ao buscar jogos" });
+    }
+    
+    return res.json(jogos);
+  });
+});
+
+// Adiciona jogo de outro usuário ao catálogo
+app.post("/api/jogos/adicionar-ao-catalogo", authenticate, (req, res) => {
+  const { jogoId } = req.body;
+  const userId = req.userId;
+  
+  if (!jogoId) {
+    return res.status(400).json({ error: "ID do jogo não fornecido" });
+  }
+  
+  db.query('SELECT * FROM jogos WHERE id = ?', [jogoId], (err, jogos) => {
+    if (err) {
+      console.error("Erro ao verificar jogo:", err);
+      return res.status(500).json({ error: "Erro ao verificar jogo" });
+    }
+    
+    if (jogos.length === 0) {
+      return res.status(404).json({ error: "Jogo não encontrado" });
+    }
+    
+    const jogoOriginal = jogos[0];
+    
+    db.query('SELECT * FROM jogos WHERE nome = ? AND userId = ?', 
+      [jogoOriginal.nome, userId], 
+      (err, existentes) => {
+        if (err) {
+          return res.status(500).json({ error: "Erro ao verificar catálogo" });
+        }
+        
+        if (existentes.length > 0) {
+          return res.status(409).json({ error: "Jogo já está no seu catálogo" });
+        }
+        
+        db.query(
+          'INSERT INTO jogos (nome, ano, genero, imagem, userId) VALUES (?, ?, ?, ?, ?)',
+          [jogoOriginal.nome, jogoOriginal.ano, jogoOriginal.genero, jogoOriginal.imagem, userId],
+          (err, result) => {
+            if (err) {
+              return res.status(500).json({ error: "Erro ao adicionar jogo ao catálogo" });
+            }
+            
+            res.status(200).json({ 
+              message: "Jogo adicionado ao seu catálogo com sucesso",
+              novoJogoId: result.insertId
+            });
+          }
+        );
+      }
+    );
+  });
+});
+
 // Inicia o servidor
 app.listen(port, () => {
   console.log(`Servidor rodando na porta ${port}`);
 });
+
